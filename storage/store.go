@@ -2160,6 +2160,12 @@ func makeBigDataBaseName(key string) string {
 	return key
 }
 
+// ListGraphDrivers returns a list of the known graph drivers, whose names can
+// be used in the GraphDriverName field of a StoreOptions structure.
+func ListGraphDrivers() []string {
+	return drivers.ListDrivers()
+}
+
 func init() {
 	DefaultStoreOptions.RunRoot = "/var/run/containers"
 	DefaultStoreOptions.GraphRoot = "/var/lib/containers"
