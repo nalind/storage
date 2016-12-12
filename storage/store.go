@@ -2,6 +2,7 @@ package storage
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"io"
 	"io/ioutil"
@@ -36,6 +37,7 @@ var (
 	ErrLayerUsedByContainer = errors.New("layer is in use by a container")
 	ErrImageUsedByContainer = errors.New("image is in use by a container")
 	ErrIncompleteOptions    = errors.New("missing necessary StoreOptions")
+	ErrConflictingOptions   = errors.New("passed-in StoreOptions conflict with cached options")
 	ErrSizeUnknown          = errors.New("size is not known")
 	DefaultStoreOptions     StoreOptions
 	stores                  []*store
@@ -412,18 +414,6 @@ func GetStore(options StoreOptions) (Store, error) {
 	if options.GraphRoot == "" {
 		return nil, ErrIncompleteOptions
 	}
-	if options.RunRoot == "" {
-		return nil, ErrIncompleteOptions
-	}
-
-	if err := os.MkdirAll(options.RunRoot, 0700); err != nil && !os.IsExist(err) {
-		return nil, err
-	}
-	for _, subdir := range []string{} {
-		if err := os.MkdirAll(filepath.Join(options.RunRoot, subdir), 0700); err != nil && !os.IsExist(err) {
-			return nil, err
-		}
-	}
 	if err := os.MkdirAll(options.GraphRoot, 0700); err != nil && !os.IsExist(err) {
 		return nil, err
 	}
@@ -437,6 +427,45 @@ func GetStore(options StoreOptions) (Store, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if options.RunRoot == "" {
+		config, err := ioutil.ReadFile(filepath.Join(options.GraphRoot, "settings.json"))
+		if err != nil {
+			return nil, ErrIncompleteOptions
+		}
+		tmp := StoreOptions{}
+		if json.Unmarshal(config, &tmp) != nil {
+			return nil, ErrIncompleteOptions
+		}
+		if tmp.RunRoot == "" {
+			return nil, ErrIncompleteOptions
+		}
+		if tmp.GraphRoot != options.GraphRoot {
+			return nil, ErrConflictingOptions
+		}
+		if tmp.GraphDriverName != "" && options.GraphDriverName != "" && tmp.GraphDriverName != options.GraphDriverName {
+			return nil, ErrConflictingOptions
+		}
+		options.RunRoot = tmp.RunRoot
+	}
+	jOptions, err := json.Marshal(&options)
+	if err != nil {
+		return nil, err
+	}
+	err = ioutils.AtomicWriteFile(filepath.Join(options.GraphRoot, "settings.json"), jOptions, 0600)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := os.MkdirAll(options.RunRoot, 0700); err != nil && !os.IsExist(err) {
+		return nil, err
+	}
+	for _, subdir := range []string{} {
+		if err := os.MkdirAll(filepath.Join(options.RunRoot, subdir), 0700); err != nil && !os.IsExist(err) {
+			return nil, err
+		}
+	}
+
 	s := &store{
 		runRoot:         options.RunRoot,
 		graphLock:       graphLock,
