@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/containers/storage/pkg/ioutils"
@@ -277,10 +278,21 @@ func (r *imageStore) SetNames(id string, names []string) error {
 			delete(r.byname, name)
 		}
 		for _, name := range names {
+			if strings.Contains(name, "@") {
+				name = name[:strings.Index(name, "@")]
+			}
+			if name == "" {
+				continue
+			}
 			if otherImage, ok := r.byname[name]; ok {
 				r.removeName(otherImage, name)
 			}
 			r.byname[name] = image
+			nameWithID := name + "@" + id
+			if otherImage, ok := r.byname[nameWithID]; ok {
+				r.removeName(otherImage, nameWithID)
+			}
+			r.byname[nameWithID] = image
 		}
 		image.Names = names
 		return r.Save()
