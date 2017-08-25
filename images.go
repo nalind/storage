@@ -2,6 +2,7 @@ package storage
 
 import (
 	"encoding/json"
+	baseerrors "errors"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -10,12 +11,15 @@ import (
 	"github.com/containers/storage/pkg/ioutils"
 	"github.com/containers/storage/pkg/stringid"
 	"github.com/containers/storage/pkg/truncindex"
+	digest "github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 )
 
 var (
 	// ErrImageUnknown indicates that there was no image with the specified name or ID
-	ErrImageUnknown = errors.New("image not known")
+	ErrImageUnknown = baseerrors.New("image not known")
+	// ErrDuplicateImageNames indicates that the store incorrectly assigns the same name to multiple images
+	ErrDuplicateImageNames = baseerrors.New("image store assigns the same name to multiple images")
 )
 
 // An Image is a reference to a layer and an associated metadata string.
@@ -153,7 +157,7 @@ func (r *imageStore) Load() error {
 		}
 	}
 	if shouldSave && !r.IsReadWrite() {
-		return errors.New("image store assigns the same name to multiple images")
+		return errors.Wrapf(ErrDuplicateImageNames, "error loading image store information from %q", r.dir)
 	}
 	r.images = images
 	r.idindex = truncindex.NewTruncIndex(idlist)

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	baseerrors "errors"
 	"io"
 	"io/ioutil"
 	"os"
@@ -29,9 +30,11 @@ const (
 
 var (
 	// ErrParentUnknown indicates that we didn't record the ID of the parent of the specified layer
-	ErrParentUnknown = errors.New("parent of layer not known")
+	ErrParentUnknown = baseerrors.New("parent of layer not known")
 	// ErrLayerUnknown indicates that there was no layer with the specified name or ID
-	ErrLayerUnknown = errors.New("layer not known")
+	ErrLayerUnknown = baseerrors.New("layer not known")
+	// ErrDuplicateLayerNames indicates that the store incorrectly assigns the same name to multiple layers
+	ErrDuplicateLayerNames = baseerrors.New("container store assigns the same name to multiple layers")
 )
 
 // A Layer is a record of a copy-on-write layer that's stored by the lower
@@ -280,7 +283,7 @@ func (r *layerStore) Load() error {
 		}
 	}
 	if shouldSave && !r.IsReadWrite() {
-		return errors.New("layer store assigns the same name to multiple layers")
+		return errors.Wrapf(ErrDuplicateImageNames, "error loading layer store information from %q", r.layerdir)
 	}
 	mpath := r.mountspath()
 	data, err = ioutil.ReadFile(mpath)

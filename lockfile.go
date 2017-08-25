@@ -1,6 +1,7 @@
 package storage
 
 import (
+	baseerrors "errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -45,7 +46,7 @@ var (
 	lockfiles     map[string]*lockfile
 	lockfilesLock sync.Mutex
 	// ErrLockReadOnly indicates that the caller only took a read-only lock, and is not allowed to write
-	ErrLockReadOnly = errors.New("lock is not a read-write lock")
+	ErrLockReadOnly = baseerrors.New("lock is not a read-write lock")
 )
 
 // GetLockfile opens a read-write lock file, creating it if necessary.  The
