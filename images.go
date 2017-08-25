@@ -50,6 +50,10 @@ type Image struct {
 	// that has been stored, if they're known.
 	BigDataSizes map[string]int64 `json:"big-data-sizes,omitempty"`
 
+	// BigDataDigests maps the names in BigDataNames to the digests of the
+	// data that has been stored, if they're known.
+	BigDataDigests map[string]digest.Digest `json:"big-data-digests,omitempty"`
+
 	// Created is the datestamp for when this image was created.  Older
 	// versions of the library did not track this information, so callers
 	// will likely want to use the IsZero() method to verify that a value
@@ -104,12 +108,13 @@ type ImageStore interface {
 }
 
 type imageStore struct {
-	lockfile Locker
-	dir      string
-	images   []*Image
-	idindex  *truncindex.TruncIndex
-	byid     map[string]*Image
-	byname   map[string]*Image
+	lockfile   Locker
+	dir        string
+	images     []*Image
+	idindex    *truncindex.TruncIndex
+	byid       map[string]*Image
+	byname     map[string]*Image
+	bdbydigest map[digest.Digest][]IDandName
 }
 
 func (r *imageStore) Images() ([]Image, error) {
@@ -143,6 +148,7 @@ func (r *imageStore) Load() error {
 	idlist := []string{}
 	ids := make(map[string]*Image)
 	names := make(map[string]*Image)
+	digests := make(map[digest.Digest][]IDandName)
 	if err = json.Unmarshal(data, &images); len(data) == 0 || err == nil {
 		idlist = make([]string, 0, len(images))
 		for n, image := range images {
@@ -155,6 +161,9 @@ func (r *imageStore) Load() error {
 				}
 				names[name] = images[n]
 			}
+			for name, hash := range image.BigDataDigests {
+				digests[hash] = append(digests[hash], IDandName{ID: image.ID, Name: name})
+			}
 		}
 	}
 	if shouldSave && !r.IsReadWrite() {
@@ -164,6 +173,7 @@ func (r *imageStore) Load() error {
 	r.idindex = truncindex.NewTruncIndex(idlist)
 	r.byid = ids
 	r.byname = names
+	r.bdbydigest = digests
 	if shouldSave {
 		return r.Save()
 	}
@@ -197,11 +207,12 @@ func newImageStore(dir string) (ImageStore, error) {
 	lockfile.Lock()
 	defer lockfile.Unlock()
 	istore := imageStore{
-		lockfile: lockfile,
-		dir:      dir,
-		images:   []*Image{},
-		byid:     make(map[string]*Image),
-		byname:   make(map[string]*Image),
+		lockfile:   lockfile,
+		dir:        dir,
+		images:     []*Image{},
+		byid:       make(map[string]*Image),
+		byname:     make(map[string]*Image),
+		bdbydigest: make(map[digest.Digest][]IDandName),
 	}
 	if err := istore.Load(); err != nil {
 		return nil, err
@@ -217,11 +228,12 @@ func newROImageStore(dir string) (ROImageStore, error) {
 	lockfile.Lock()
 	defer lockfile.Unlock()
 	istore := imageStore{
-		lockfile: lockfile,
-		dir:      dir,
-		images:   []*Image{},
-		byid:     make(map[string]*Image),
-		byname:   make(map[string]*Image),
+		lockfile:   lockfile,
+		dir:        dir,
+		images:     []*Image{},
+		byid:       make(map[string]*Image),
+		byname:     make(map[string]*Image),
+		bdbydigest: make(map[digest.Digest][]IDandName),
 	}
 	if err := istore.Load(); err != nil {
 		return nil, err
@@ -261,6 +273,9 @@ func (r *imageStore) SetFlag(id string, flag string, value interface{}) error {
 	if !ok {
 		return ErrImageUnknown
 	}
+	if image.Flags == nil {
+		image.Flags = make(map[string]interface{})
+	}
 	image.Flags[flag] = value
 	return r.Save()
 }
@@ -290,14 +305,15 @@ func (r *imageStore) Create(id string, names []string, layer, metadata string, c
 	}
 	if err == nil {
 		image = &Image{
-			ID:           id,
-			Names:        names,
-			TopLayer:     layer,
-			Metadata:     metadata,
-			BigDataNames: []string{},
-			BigDataSizes: make(map[string]int64),
-			Created:      created,
-			Flags:        make(map[string]interface{}),
+			ID:             id,
+			Names:          names,
+			TopLayer:       layer,
+			Metadata:       metadata,
+			BigDataNames:   []string{},
+			BigDataSizes:   make(map[string]int64),
+			BigDataDigests: make(map[string]digest.Digest),
+			Created:        created,
+			Flags:          make(map[string]interface{}),
 		}
 		r.images = append(r.images, image)
 		r.idindex.Add(id)
@@ -409,6 +425,9 @@ func (r *imageStore) Exists(id string) bool {
 }
 
 func (r *imageStore) BigData(id, key string) ([]byte, error) {
+	if key == "" {
+		return nil, errors.Wrapf(ErrInvalidBigDataName, "data name %q can not be used as a filename", key)
+	}
 	image, ok := r.lookup(id)
 	if !ok {
 		return nil, ErrImageUnknown
@@ -417,6 +436,9 @@ func (r *imageStore) BigData(id, key string) ([]byte, error) {
 }
 
 func (r *imageStore) BigDataSize(id, key string) (int64, error) {
+	if key == "" {
+		return -1, errors.Wrapf(ErrInvalidBigDataName, "data name %q can not be used as a filename", key)
+	}
 	image, ok := r.lookup(id)
 	if !ok {
 		return -1, ErrImageUnknown
@@ -424,7 +446,43 @@ func (r *imageStore) BigDataSize(id, key string) (int64, error) {
 	if size, ok := image.BigDataSizes[key]; ok {
 		return size, nil
 	}
+	if data, err := r.BigData(id, key); err == nil && data != nil {
+		if r.SetBigData(id, key, data) == nil {
+			image, ok := r.lookup(id)
+			if !ok {
+				return -1, ErrImageUnknown
+			}
+			if size, ok := image.BigDataSizes[key]; ok {
+				return size, nil
+			}
+		}
+	}
 	return -1, ErrSizeUnknown
+}
+
+func (r *imageStore) BigDataDigest(id, key string) (digest.Digest, error) {
+	if key == "" {
+		return "", errors.Wrapf(ErrInvalidBigDataName, "data name %q can not be used as a filename", key)
+	}
+	image, ok := r.lookup(id)
+	if !ok {
+		return "", ErrImageUnknown
+	}
+	if d, ok := image.BigDataDigests[key]; ok {
+		return d, nil
+	}
+	if data, err := r.BigData(id, key); err == nil && data != nil {
+		if r.SetBigData(id, key, data) == nil {
+			image, ok := r.lookup(id)
+			if !ok {
+				return "", ErrImageUnknown
+			}
+			if d, ok := image.BigDataDigests[key]; ok {
+				return d, nil
+			}
+		}
+	}
+	return "", ErrDigestUnknown
 }
 
 func (r *imageStore) BigDataNames(id string) ([]string, error) {
@@ -435,7 +493,21 @@ func (r *imageStore) BigDataNames(id string) ([]string, error) {
 	return image.BigDataNames, nil
 }
 
+func (r *imageStore) BigDataByDigest(d digest.Digest) ([]IDandName, error) {
+	if err := d.Validate(); err != nil {
+		return nil, errors.Wrapf(err, "error looking for image data matching digest %q", d)
+	}
+	results, ok := r.bdbydigest[d]
+	if ok {
+		return results, nil
+	}
+	return nil, errors.Wrapf(os.ErrNotExist, "no big data items match digest %q", d)
+}
+
 func (r *imageStore) SetBigData(id, key string, data []byte) error {
+	if key == "" {
+		return errors.Wrapf(ErrInvalidBigDataName, "data name %q can not be used as a filename", key)
+	}
 	if !r.IsReadWrite() {
 		return errors.Wrapf(ErrStoreIsReadOnly, "not allowed to save data items associated with images at %q", r.imagespath())
 	}
@@ -448,20 +520,57 @@ func (r *imageStore) SetBigData(id, key string, data []byte) error {
 	}
 	err := ioutils.AtomicWriteFile(r.datapath(image.ID, key), data, 0600)
 	if err == nil {
-		add := true
 		save := false
-		oldSize, ok := image.BigDataSizes[key]
+		oldSize, sizeOk := image.BigDataSizes[key]
+		if image.BigDataSizes == nil {
+			image.BigDataSizes = make(map[string]int64)
+		}
 		image.BigDataSizes[key] = int64(len(data))
-		if !ok || oldSize != image.BigDataSizes[key] {
+		oldDigest, digestOk := image.BigDataDigests[key]
+		newDigest := digest.Canonical.FromBytes(data)
+		if image.BigDataDigests == nil {
+			image.BigDataDigests = make(map[string]digest.Digest)
+		}
+		image.BigDataDigests[key] = newDigest
+		if !sizeOk || oldSize != image.BigDataSizes[key] || !digestOk || oldDigest != newDigest {
 			save = true
 		}
+		addName := true
 		for _, name := range image.BigDataNames {
 			if name == key {
-				add = false
+				addName = false
 				break
 			}
 		}
-		if add {
+		if oldDigest != newDigest {
+			if oldDigest != "" {
+				oldlist := r.bdbydigest[oldDigest]
+				deleteIndex := -1
+				for i := range oldlist {
+					if oldlist[i].ID == image.ID && oldlist[i].Name == key {
+						deleteIndex = i
+						break
+					}
+				}
+				if deleteIndex != -1 {
+					prunedList := []IDandName{}
+					if deleteIndex == len(oldlist)-1 {
+						prunedList = oldlist[:len(oldlist)-1]
+					} else {
+						prunedList = append(oldlist[:deleteIndex], oldlist[deleteIndex+1:]...)
+					}
+					if len(prunedList) > 0 {
+						r.bdbydigest[oldDigest] = prunedList
+					} else {
+						delete(r.bdbydigest, oldDigest)
+					}
+				}
+			}
+			list := append(r.bdbydigest[newDigest], IDandName{ID: image.ID, Name: key})
+			r.bdbydigest[newDigest] = list
+			save = true
+		}
+		if addName {
 			image.BigDataNames = append(image.BigDataNames, key)
 			save = true
 		}

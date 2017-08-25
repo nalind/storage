@@ -59,6 +59,8 @@ var (
 	ErrDigestUnknown = baseerrors.New("digest is not known")
 	// ErrStoreIsReadOnly is returned when the caller makes a call to a read-only store that would require modifying its contents.
 	ErrStoreIsReadOnly = baseerrors.New("called a write method on a read-only store")
+	// ErrInvalidBigDataName is returned when a requested name for a big data item is invalid.
+	ErrInvalidBigDataName = baseerrors.New("invalid big data name")
 	// DefaultStoreOptions is a reasonable default set of options.
 	DefaultStoreOptions StoreOptions
 	stores              []*store
@@ -110,6 +112,12 @@ type MetadataStore interface {
 	RWMetadataStore
 }
 
+// An IDandName contains an image or container ID and the name of a big data item.
+type IDandName struct {
+	ID   string
+	Name string
+}
+
 // An ROBigDataStore wraps up the read-only big-data related methods of the
 // various types of file-based lookaside stores that we implement.
 type ROBigDataStore interface {
@@ -121,9 +129,17 @@ type ROBigDataStore interface {
 	// data associated with this ID, if it has previously been set.
 	BigDataSize(id, key string) (int64, error)
 
+	// BigDataDigest retrieves the digest of a (potentially large) piece of
+	// data associated with this ID, if it has previously been set.
+	BigDataDigest(id, key string) (digest.Digest, error)
+
 	// BigDataNames() returns a list of the names of previously-stored pieces of
 	// data.
 	BigDataNames(id string) ([]string, error)
+
+	// BigDataByDigest() returns a list of the items in the store and their
+	// associated big data items which match the specified digest.
+	BigDataByDigest(d digest.Digest) ([]IDandName, error)
 }
 
 // A RWBigDataStore wraps up the read-write big-data related methods of the
@@ -385,6 +401,14 @@ type Store interface {
 	// of named data associated with an image.
 	ImageBigDataSize(id, key string) (int64, error)
 
+	// ImageBigDataDigest retrieves the digest of a (possibly large) chunk
+	// of named data associated with an image.
+	ImageBigDataDigest(id, key string) (digest.Digest, error)
+
+	// ImageBigDataByDigest retrieves a list of images and their big data items
+	// which match the specified digest.
+	ImageBigDataByDigest(d digest.Digest) ([]IDandName, error)
+
 	// SetImageBigData stores a (possibly large) chunk of named data associated
 	// with an image.
 	SetImageBigData(id, key string, data []byte) error
@@ -400,6 +424,14 @@ type Store interface {
 	// ContainerBigDataSize retrieves the size of a (possibly large)
 	// chunk of named data associated with a container.
 	ContainerBigDataSize(id, key string) (int64, error)
+
+	// ContainerBigDataDigest retrieves the digest of a (possibly large)
+	// chunk of named data associated with a container.
+	ContainerBigDataDigest(id, key string) (digest.Digest, error)
+
+	// ContainerBigDataByDigest retrieves a list of containers and their
+	// big data items which match the specified digest.
+	ContainerBigDataByDigest(d digest.Digest) ([]IDandName, error)
 
 	// SetContainerBigData stores a (possibly large) chunk of named data
 	// associated with a container.
@@ -1072,6 +1104,30 @@ func (s *store) ImageBigDataSize(id, key string) (int64, error) {
 	return -1, ErrSizeUnknown
 }
 
+func (s *store) ImageBigDataDigest(id, key string) (digest.Digest, error) {
+	ristore, err := s.ImageStore()
+	if err != nil {
+		return "", err
+	}
+	stores, err := s.ROImageStores()
+	if err != nil {
+		return "", err
+	}
+	stores = append([]ROImageStore{ristore}, stores...)
+	for _, ristore := range stores {
+		ristore.Lock()
+		defer ristore.Unlock()
+		if modified, err := ristore.Modified(); modified || err != nil {
+			ristore.Load()
+		}
+		d, err := ristore.BigDataDigest(id, key)
+		if err == nil && d.Validate() == nil {
+			return d, nil
+		}
+	}
+	return "", ErrDigestUnknown
+}
+
 func (s *store) ImageBigData(id, key string) ([]byte, error) {
 	ristore, err := s.ImageStore()
 	if err != nil {
@@ -1095,6 +1151,36 @@ func (s *store) ImageBigData(id, key string) ([]byte, error) {
 	}
 
 	return nil, ErrImageUnknown
+}
+
+func (s *store) ImageBigDataByDigest(d digest.Digest) (results []IDandName, err error) {
+	if err := d.Validate(); err != nil {
+		return nil, errors.Wrapf(err, "error looking for image data matching digest %q", d)
+	}
+	ristore, err := s.ImageStore()
+	if err != nil {
+		return nil, err
+	}
+	stores, err := s.ROImageStores()
+	if err != nil {
+		return nil, err
+	}
+	stores = append([]ROImageStore{ristore}, stores...)
+	for _, ristore := range stores {
+		ristore.Lock()
+		defer ristore.Unlock()
+		if modified, err := ristore.Modified(); modified || err != nil {
+			ristore.Load()
+		}
+		r, err := ristore.BigDataByDigest(d)
+		if err == nil && len(r) > 0 {
+			results = append(results, r...)
+		}
+	}
+	if len(results) == 0 {
+		return nil, errors.Wrapf(os.ErrNotExist, "no big data items match digest %q", d)
+	}
+	return results, nil
 }
 
 func (s *store) SetImageBigData(id, key string, data []byte) error {
@@ -1141,6 +1227,20 @@ func (s *store) ContainerBigDataSize(id, key string) (int64, error) {
 	return rcstore.BigDataSize(id, key)
 }
 
+func (s *store) ContainerBigDataDigest(id, key string) (digest.Digest, error) {
+	rcstore, err := s.ContainerStore()
+	if err != nil {
+		return "", err
+	}
+	rcstore.Lock()
+	defer rcstore.Unlock()
+	if modified, err := rcstore.Modified(); modified || err != nil {
+		rcstore.Load()
+	}
+
+	return rcstore.BigDataDigest(id, key)
+}
+
 func (s *store) ContainerBigData(id, key string) ([]byte, error) {
 	rcstore, err := s.ContainerStore()
 	if err != nil {
@@ -1153,6 +1253,23 @@ func (s *store) ContainerBigData(id, key string) ([]byte, error) {
 	}
 
 	return rcstore.BigData(id, key)
+}
+
+func (s *store) ContainerBigDataByDigest(d digest.Digest) (results []IDandName, err error) {
+	if err := d.Validate(); err != nil {
+		return nil, errors.Wrapf(err, "error looking for container data matching digest %q", d)
+	}
+	rcstore, err := s.ContainerStore()
+	if err != nil {
+		return nil, err
+	}
+	rcstore.Lock()
+	defer rcstore.Unlock()
+	if modified, err := rcstore.Modified(); modified || err != nil {
+		rcstore.Load()
+	}
+
+	return rcstore.BigDataByDigest(d)
 }
 
 func (s *store) SetContainerBigData(id, key string, data []byte) error {
@@ -1880,10 +1997,16 @@ func (s *store) layersByMappedDigest(m func(ROLayerStore, digest.Digest) ([]Laye
 }
 
 func (s *store) LayersByCompressedDigest(d digest.Digest) ([]Layer, error) {
+	if err := d.Validate(); err != nil {
+		return nil, errors.Wrapf(err, "error looking for compressed layers matching digest %q", d)
+	}
 	return s.layersByMappedDigest(func(r ROLayerStore, d digest.Digest) ([]Layer, error) { return r.LayersByCompressedDigest(d) }, d)
 }
 
 func (s *store) LayersByUncompressedDigest(d digest.Digest) ([]Layer, error) {
+	if err := d.Validate(); err != nil {
+		return nil, errors.Wrapf(err, "error looking for layers matching digest %q", d)
+	}
 	return s.layersByMappedDigest(func(r ROLayerStore, d digest.Digest) ([]Layer, error) { return r.LayersByUncompressedDigest(d) }, d)
 }
 

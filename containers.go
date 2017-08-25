@@ -11,6 +11,7 @@ import (
 	"github.com/containers/storage/pkg/ioutils"
 	"github.com/containers/storage/pkg/stringid"
 	"github.com/containers/storage/pkg/truncindex"
+	digest "github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 )
 
@@ -50,6 +51,10 @@ type Container struct {
 	// BigDataSizes maps the names in BigDataNames to the sizes of the data
 	// that has been stored, if they're known.
 	BigDataSizes map[string]int64 `json:"big-data-sizes,omitempty"`
+
+	// BigDataDigests maps the names in BigDataNames to the digests of the
+	// data that has been stored, if they're known.
+	BigDataDigests map[string]digest.Digest `json:"big-data-digests,omitempty"`
 
 	// Created is the datestamp for when this container was created.  Older
 	// versions of the library did not track this information, so callers
@@ -105,6 +110,7 @@ type containerStore struct {
 	byid       map[string]*Container
 	bylayer    map[string]*Container
 	byname     map[string]*Container
+	bdbydigest map[digest.Digest][]IDandName
 }
 
 func (r *containerStore) Containers() ([]Container, error) {
@@ -139,6 +145,7 @@ func (r *containerStore) Load() error {
 	idlist := []string{}
 	ids := make(map[string]*Container)
 	names := make(map[string]*Container)
+	digests := make(map[digest.Digest][]IDandName)
 	if err = json.Unmarshal(data, &containers); len(data) == 0 || err == nil {
 		idlist = make([]string, 0, len(containers))
 		for n, container := range containers {
@@ -152,6 +159,9 @@ func (r *containerStore) Load() error {
 				}
 				names[name] = containers[n]
 			}
+			for name, hash := range container.BigDataDigests {
+				digests[hash] = append(digests[hash], IDandName{ID: container.ID, Name: name})
+			}
 		}
 	}
 	r.containers = containers
@@ -159,6 +169,7 @@ func (r *containerStore) Load() error {
 	r.byid = ids
 	r.bylayer = layers
 	r.byname = names
+	r.bdbydigest = digests
 	if needSave {
 		return r.Save()
 	}
@@ -195,6 +206,7 @@ func newContainerStore(dir string) (ContainerStore, error) {
 		byid:       make(map[string]*Container),
 		bylayer:    make(map[string]*Container),
 		byname:     make(map[string]*Container),
+		bdbydigest: make(map[digest.Digest][]IDandName),
 	}
 	if err := cstore.Load(); err != nil {
 		return nil, err
@@ -231,6 +243,9 @@ func (r *containerStore) SetFlag(id string, flag string, value interface{}) erro
 	if !ok {
 		return ErrContainerUnknown
 	}
+	if container.Flags == nil {
+		container.Flags = make(map[string]interface{})
+	}
 	container.Flags[flag] = value
 	return r.Save()
 }
@@ -254,15 +269,16 @@ func (r *containerStore) Create(id string, names []string, image, layer, metadat
 	}
 	if err == nil {
 		container = &Container{
-			ID:           id,
-			Names:        names,
-			ImageID:      image,
-			LayerID:      layer,
-			Metadata:     metadata,
-			BigDataNames: []string{},
-			BigDataSizes: make(map[string]int64),
-			Created:      time.Now().UTC(),
-			Flags:        make(map[string]interface{}),
+			ID:             id,
+			Names:          names,
+			ImageID:        image,
+			LayerID:        layer,
+			Metadata:       metadata,
+			BigDataNames:   []string{},
+			BigDataSizes:   make(map[string]int64),
+			BigDataDigests: make(map[string]digest.Digest),
+			Created:        time.Now().UTC(),
+			Flags:          make(map[string]interface{}),
 		}
 		r.containers = append(r.containers, container)
 		r.byid[id] = container
@@ -368,6 +384,9 @@ func (r *containerStore) Exists(id string) bool {
 }
 
 func (r *containerStore) BigData(id, key string) ([]byte, error) {
+	if key == "" {
+		return nil, errors.Wrapf(ErrInvalidBigDataName, "data name %q can not be used as a filename", key)
+	}
 	c, ok := r.lookup(id)
 	if !ok {
 		return nil, ErrContainerUnknown
@@ -376,6 +395,9 @@ func (r *containerStore) BigData(id, key string) ([]byte, error) {
 }
 
 func (r *containerStore) BigDataSize(id, key string) (int64, error) {
+	if key == "" {
+		return -1, errors.Wrapf(ErrInvalidBigDataName, "data name %q can not be used as a filename", key)
+	}
 	c, ok := r.lookup(id)
 	if !ok {
 		return -1, ErrContainerUnknown
@@ -383,7 +405,43 @@ func (r *containerStore) BigDataSize(id, key string) (int64, error) {
 	if size, ok := c.BigDataSizes[key]; ok {
 		return size, nil
 	}
+	if data, err := r.BigData(id, key); err == nil && data != nil {
+		if r.SetBigData(id, key, data) == nil {
+			c, ok := r.lookup(id)
+			if !ok {
+				return -1, ErrContainerUnknown
+			}
+			if size, ok := c.BigDataSizes[key]; ok {
+				return size, nil
+			}
+		}
+	}
 	return -1, ErrSizeUnknown
+}
+
+func (r *containerStore) BigDataDigest(id, key string) (digest.Digest, error) {
+	if key == "" {
+		return "", errors.Wrapf(ErrInvalidBigDataName, "data name %q can not be used as a filename", key)
+	}
+	c, ok := r.lookup(id)
+	if !ok {
+		return "", ErrContainerUnknown
+	}
+	if d, ok := c.BigDataDigests[key]; ok {
+		return d, nil
+	}
+	if data, err := r.BigData(id, key); err == nil && data != nil {
+		if r.SetBigData(id, key, data) == nil {
+			c, ok := r.lookup(id)
+			if !ok {
+				return "", ErrContainerUnknown
+			}
+			if d, ok := c.BigDataDigests[key]; ok {
+				return d, nil
+			}
+		}
+	}
+	return "", ErrDigestUnknown
 }
 
 func (r *containerStore) BigDataNames(id string) ([]string, error) {
@@ -394,7 +452,21 @@ func (r *containerStore) BigDataNames(id string) ([]string, error) {
 	return c.BigDataNames, nil
 }
 
+func (r *containerStore) BigDataByDigest(d digest.Digest) ([]IDandName, error) {
+	if err := d.Validate(); err != nil {
+		return nil, errors.Wrapf(err, "error looking for container data matching digest %q", d)
+	}
+	results, ok := r.bdbydigest[d]
+	if ok {
+		return results, nil
+	}
+	return nil, errors.Wrapf(os.ErrNotExist, "no big data items match digest %q", d)
+}
+
 func (r *containerStore) SetBigData(id, key string, data []byte) error {
+	if key == "" {
+		return errors.Wrapf(ErrInvalidBigDataName, "data name %q can not be used as a filename", key)
+	}
 	c, ok := r.lookup(id)
 	if !ok {
 		return ErrContainerUnknown
@@ -405,19 +477,56 @@ func (r *containerStore) SetBigData(id, key string, data []byte) error {
 	err := ioutils.AtomicWriteFile(r.datapath(c.ID, key), data, 0600)
 	if err == nil {
 		save := false
-		oldSize, ok := c.BigDataSizes[key]
+		oldSize, sizeOk := c.BigDataSizes[key]
+		if c.BigDataSizes == nil {
+			c.BigDataSizes = make(map[string]int64)
+		}
 		c.BigDataSizes[key] = int64(len(data))
-		if !ok || oldSize != c.BigDataSizes[key] {
+		oldDigest, digestOk := c.BigDataDigests[key]
+		newDigest := digest.Canonical.FromBytes(data)
+		if c.BigDataDigests == nil {
+			c.BigDataDigests = make(map[string]digest.Digest)
+		}
+		c.BigDataDigests[key] = newDigest
+		if !sizeOk || oldSize != c.BigDataSizes[key] || !digestOk || oldDigest != newDigest {
 			save = true
 		}
-		add := true
+		addName := true
 		for _, name := range c.BigDataNames {
 			if name == key {
-				add = false
+				addName = false
 				break
 			}
 		}
-		if add {
+		if oldDigest != newDigest {
+			if oldDigest != "" {
+				oldlist := r.bdbydigest[oldDigest]
+				deleteIndex := -1
+				for i := range oldlist {
+					if oldlist[i].ID == c.ID && oldlist[i].Name == key {
+						deleteIndex = i
+						break
+					}
+				}
+				if deleteIndex != -1 {
+					prunedList := []IDandName{}
+					if deleteIndex == len(oldlist)-1 {
+						prunedList = oldlist[:len(oldlist)-1]
+					} else {
+						prunedList = append(oldlist[:deleteIndex], oldlist[deleteIndex+1:]...)
+					}
+					if len(prunedList) > 0 {
+						r.bdbydigest[oldDigest] = prunedList
+					} else {
+						delete(r.bdbydigest, oldDigest)
+					}
+				}
+			}
+			list := append(r.bdbydigest[newDigest], IDandName{ID: c.ID, Name: key})
+			r.bdbydigest[newDigest] = list
+			save = true
+		}
+		if addName {
 			c.BigDataNames = append(c.BigDataNames, key)
 			save = true
 		}
