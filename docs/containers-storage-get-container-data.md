@@ -19,4 +19,7 @@ Write the data to a file instead of stdout.
 
 ## SEE ALSO
 containers-storage-list-container-data(1)
+containers-storage-get-container-data-size(1)
+containers-storage-get-container-data-digest(1)
+containers-storage-get-container-data-by-digest(1)
 containers-storage-set-container-data(1)

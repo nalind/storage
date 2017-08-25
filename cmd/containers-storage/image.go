@@ -8,6 +8,7 @@ import (
 
 	"github.com/containers/storage"
 	"github.com/containers/storage/pkg/mflag"
+	digest "github.com/opencontainers/go-digest"
 )
 
 var (
@@ -83,6 +84,52 @@ func getImageBigData(flags *mflag.FlagSet, action string, m storage.Store, args 
 	return 0
 }
 
+func getImageBigDataSize(flags *mflag.FlagSet, action string, m storage.Store, args []string) int {
+	image, err := m.Image(args[0])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		return 1
+	}
+	size, err := m.ImageBigDataSize(image.ID, args[1])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		return 1
+	}
+	fmt.Fprintf(os.Stdout, "%d\n", size)
+	return 0
+}
+
+func getImageBigDataDigest(flags *mflag.FlagSet, action string, m storage.Store, args []string) int {
+	image, err := m.Image(args[0])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		return 1
+	}
+	d, err := m.ImageBigDataDigest(image.ID, args[1])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		return 1
+	}
+	if d.Validate() != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", d.Validate())
+		return 1
+	}
+	fmt.Fprintf(os.Stdout, "%s\n", d.String())
+	return 0
+}
+
+func getImageBigDataByDigest(flags *mflag.FlagSet, action string, m storage.Store, args []string) int {
+	info, err := m.ImageBigDataByDigest(digest.Digest(args[0]))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		return 1
+	}
+	for _, idAndName := range info {
+		fmt.Fprintf(os.Stdout, "%s:%s\n", idAndName.ID, idAndName.Name)
+	}
+	return 0
+}
+
 func setImageBigData(flags *mflag.FlagSet, action string, m storage.Store, args []string) int {
 	image, err := m.Image(args[0])
 	if err != nil {
@@ -143,6 +190,27 @@ func init() {
 			addFlags: func(flags *mflag.FlagSet, cmd *command) {
 				flags.StringVar(&paramImageDataFile, []string{"-file", "f"}, paramImageDataFile, "Write data to file")
 			},
+		},
+		command{
+			names:       []string{"get-image-data-size", "getimagedatasize"},
+			optionsHelp: "[options [...]] imageNameOrID dataName",
+			usage:       "Get size of data that is attached to an image",
+			action:      getImageBigDataSize,
+			minArgs:     2,
+		},
+		command{
+			names:       []string{"get-image-data-digest", "getimagedatadigest"},
+			optionsHelp: "[options [...]] imageNameOrID dataName",
+			usage:       "Get digest of data that is attached to an image",
+			action:      getImageBigDataDigest,
+			minArgs:     2,
+		},
+		command{
+			names:       []string{"get-image-data-by-digest", "getimagedatabydigest"},
+			optionsHelp: "[options [...]] digest",
+			usage:       "Get image IDs and names of data that match a given digest",
+			action:      getImageBigDataByDigest,
+			minArgs:     1,
 		},
 		command{
 			names:       []string{"set-image-data", "setimagedata"},

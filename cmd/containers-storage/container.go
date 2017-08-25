@@ -8,6 +8,7 @@ import (
 
 	"github.com/containers/storage"
 	"github.com/containers/storage/pkg/mflag"
+	digest "github.com/opencontainers/go-digest"
 )
 
 var (
@@ -97,6 +98,52 @@ func getContainerBigData(flags *mflag.FlagSet, action string, m storage.Store, a
 	return 0
 }
 
+func getContainerBigDataSize(flags *mflag.FlagSet, action string, m storage.Store, args []string) int {
+	container, err := m.Container(args[0])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		return 1
+	}
+	size, err := m.ContainerBigDataSize(container.ID, args[1])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		return 1
+	}
+	fmt.Fprintf(os.Stdout, "%d\n", size)
+	return 0
+}
+
+func getContainerBigDataDigest(flags *mflag.FlagSet, action string, m storage.Store, args []string) int {
+	container, err := m.Container(args[0])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		return 1
+	}
+	d, err := m.ContainerBigDataDigest(container.ID, args[1])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		return 1
+	}
+	if d.Validate() != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", d.Validate())
+		return 1
+	}
+	fmt.Fprintf(os.Stdout, "%s\n", d.String())
+	return 0
+}
+
+func getContainerBigDataByDigest(flags *mflag.FlagSet, action string, m storage.Store, args []string) int {
+	info, err := m.ContainerBigDataByDigest(digest.Digest(args[0]))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		return 1
+	}
+	for _, idAndName := range info {
+		fmt.Fprintf(os.Stdout, "%s:%s\n", idAndName.ID, idAndName.Name)
+	}
+	return 0
+}
+
 func setContainerBigData(flags *mflag.FlagSet, action string, m storage.Store, args []string) int {
 	container, err := m.Container(args[0])
 	if err != nil {
@@ -177,6 +224,27 @@ func init() {
 			addFlags: func(flags *mflag.FlagSet, cmd *command) {
 				flags.StringVar(&paramContainerDataFile, []string{"-file", "f"}, paramContainerDataFile, "Write data to file")
 			},
+		},
+		command{
+			names:       []string{"get-container-data-size", "getcontainerdatasize"},
+			optionsHelp: "[options [...]] containerNameOrID dataName",
+			usage:       "Get size of data that is attached to an container",
+			action:      getContainerBigDataSize,
+			minArgs:     2,
+		},
+		command{
+			names:       []string{"get-container-data-digest", "getcontainerdatadigest"},
+			optionsHelp: "[options [...]] containerNameOrID dataName",
+			usage:       "Get digest of data that is attached to an container",
+			action:      getContainerBigDataDigest,
+			minArgs:     2,
+		},
+		command{
+			names:       []string{"get-container-data-by-digest", "getcontainerdatabydigest"},
+			optionsHelp: "[options [...]] digest",
+			usage:       "Get container IDs and names of data that match a given digest",
+			action:      getContainerBigDataByDigest,
+			minArgs:     1,
 		},
 		command{
 			names:       []string{"set-container-data", "setcontainerdata"},
