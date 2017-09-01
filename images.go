@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/containers/storage/pkg/ioutils"
+	"github.com/containers/storage/pkg/lockfile"
 	"github.com/containers/storage/pkg/stringid"
 	"github.com/containers/storage/pkg/truncindex"
 	"github.com/pkg/errors"
@@ -180,7 +181,7 @@ func newImageStore(dir string) (ImageStore, error) {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
 	}
-	lockfile, err := GetLockfile(filepath.Join(dir, "images.lock"))
+	lockfile, err := lockfile.Get(filepath.Join(dir, "images.lock"))
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +201,7 @@ func newImageStore(dir string) (ImageStore, error) {
 }
 
 func newROImageStore(dir string) (ROImageStore, error) {
-	lockfile, err := GetROLockfile(filepath.Join(dir, "images.lock"))
+	lockfile, err := lockfile.GetRO(filepath.Join(dir, "images.lock"))
 	if err != nil {
 		return nil, err
 	}

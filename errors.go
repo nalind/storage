@@ -2,6 +2,8 @@ package storage
 
 import (
 	"errors"
+
+	"github.com/containers/storage/pkg/lockfile"
 )
 
 var (
@@ -44,7 +46,7 @@ var (
 	// ErrStoreIsReadOnly is returned when the caller makes a call to a read-only store that would require modifying its contents.
 	ErrStoreIsReadOnly = errors.New("called a write method on a read-only store")
 	// ErrLockReadOnly indicates that the caller only took a read-only lock, and is not allowed to write.
-	ErrLockReadOnly = errors.New("lock is not a read-write lock")
+	ErrLockReadOnly = lockfile.ErrLockReadOnly
 	// ErrDuplicateImageNames indicates that the read-only store uses the same name for multiple images.
 	ErrDuplicateImageNames = errors.New("read-only image store assigns the same name to multiple images")
 	// ErrDuplicateLayerNames indicates that the read-only store uses the same name for multiple layers.

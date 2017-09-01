@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/containers/storage/pkg/ioutils"
+	"github.com/containers/storage/pkg/lockfile"
 	"github.com/containers/storage/pkg/stringid"
 	"github.com/containers/storage/pkg/truncindex"
 )
@@ -174,7 +175,7 @@ func newContainerStore(dir string) (ContainerStore, error) {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
 	}
-	lockfile, err := GetLockfile(filepath.Join(dir, "containers.lock"))
+	lockfile, err := lockfile.Get(filepath.Join(dir, "containers.lock"))
 	if err != nil {
 		return nil, err
 	}

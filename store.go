@@ -19,6 +19,7 @@ import (
 	"github.com/containers/storage/pkg/archive"
 	"github.com/containers/storage/pkg/idtools"
 	"github.com/containers/storage/pkg/ioutils"
+	"github.com/containers/storage/pkg/lockfile"
 	"github.com/containers/storage/pkg/mount"
 	"github.com/containers/storage/pkg/stringid"
 	"github.com/opencontainers/go-digest"
@@ -494,7 +495,7 @@ func GetStore(options StoreOptions) (Store, error) {
 		}
 	}
 
-	graphLock, err := GetLockfile(filepath.Join(options.GraphRoot, "storage.lock"))
+	graphLock, err := lockfile.Get(filepath.Join(options.GraphRoot, "storage.lock"))
 	if err != nil {
 		return nil, err
 	}

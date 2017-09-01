@@ -13,6 +13,7 @@ import (
 	drivers "github.com/containers/storage/drivers"
 	"github.com/containers/storage/pkg/archive"
 	"github.com/containers/storage/pkg/ioutils"
+	"github.com/containers/storage/pkg/lockfile"
 	"github.com/containers/storage/pkg/stringid"
 	"github.com/containers/storage/pkg/truncindex"
 	digest "github.com/opencontainers/go-digest"
@@ -366,7 +367,7 @@ func newLayerStore(rundir string, layerdir string, driver drivers.Driver) (Layer
 	if err := os.MkdirAll(layerdir, 0700); err != nil {
 		return nil, err
 	}
-	lockfile, err := GetLockfile(filepath.Join(layerdir, "layers.lock"))
+	lockfile, err := lockfile.Get(filepath.Join(layerdir, "layers.lock"))
 	if err != nil {
 		return nil, err
 	}
@@ -388,7 +389,7 @@ func newLayerStore(rundir string, layerdir string, driver drivers.Driver) (Layer
 }
 
 func newROLayerStore(rundir string, layerdir string, driver drivers.Driver) (ROLayerStore, error) {
-	lockfile, err := GetROLockfile(filepath.Join(layerdir, "layers.lock"))
+	lockfile, err := lockfile.GetRO(filepath.Join(layerdir, "layers.lock"))
 	if err != nil {
 		return nil, err
 	}
