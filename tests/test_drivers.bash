@@ -52,5 +52,7 @@ fi
 set -e
 for driver in $drivers ; do
 	echo '['STORAGE_DRIVER="$driver"']'
+	export STORAGE_ROOT=$(eval echo \$${driver^^}_ROOT)
+	export STORAGE_RUNROOT=$(eval echo \$${driver^^}_RUNROOT)
 	env STORAGE_DRIVER="$driver" $(dirname ${BASH_SOURCE})/test_runner.bash "$@"
 done

@@ -30,7 +30,7 @@ function createrandom() {
 
 # Run the CLI with the specified options.
 function storage() {
-	${STORAGE_BINARY} --debug --graph ${TESTDIR}/root --run ${TESTDIR}/runroot --storage-driver ${STORAGE_DRIVER} ${STORAGE_OPTION:+--storage-opt=${STORAGE_OPTION}} "$@"
+	${STORAGE_BINARY} --debug --graph ${STORAGE_ROOT:-${TESTDIR}/root} --run ${STORAGE_RUNROOT:-${TESTDIR}/runroot} --storage-driver ${STORAGE_DRIVER} ${STORAGE_OPTION:+--storage-opt=${STORAGE_OPTION}} "$@"
 }
 
 # Run the CLI with the specified options, and sort its output lines.
