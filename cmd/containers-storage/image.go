@@ -33,8 +33,17 @@ func image(flags *mflag.FlagSet, action string, m storage.Store, args []string) 
 			for _, layerID := range image.MappedTopLayers {
 				fmt.Printf("Top Layer: %s\n", layerID)
 			}
+			for _, digest := range image.Digests {
+				fmt.Printf("Digest: %s\n", digest.String())
+			}
 			for _, name := range image.BigDataNames {
 				fmt.Printf("Data: %s\n", name)
+			}
+			for _, repotag := range image.RepoTags {
+				fmt.Printf("RepoTag: %s\n", repotag)
+			}
+			for _, repodigest := range image.RepoDigests {
+				fmt.Printf("RepoDigest: %s\n", repodigest)
 			}
 			size, err := m.ImageSize(image.ID)
 			if err != nil {

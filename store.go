@@ -397,6 +397,10 @@ type Store interface {
 	// named ImageDigestBigDataKey whose contents have the specified digest.
 	ImagesByDigest(d digest.Digest) ([]*Image, error)
 
+	// ImagesByRepository returns maps of images which are in a specified
+	// repository, keyed by tag names and digests.
+	ImagesByRepository(repository string) (map[string]*Image, map[digest.Digest]*Image, error)
+
 	// Container returns a specific container.
 	Container(id string) (*Container, error)
 
@@ -2889,6 +2893,43 @@ func (s *store) ImagesByDigest(d digest.Digest) ([]*Image, error) {
 	return images, nil
 }
 
+func (s *store) ImagesByRepository(repository string) (map[string]*Image, map[digest.Digest]*Image, error) {
+	tags := make(map[string]*Image)
+	digests := make(map[digest.Digest]*Image)
+
+	istore, err := s.ImageStore()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	istores, err := s.ROImageStores()
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, store := range append([]ROImageStore{istore}, istores...) {
+		store.Lock()
+		defer store.Unlock()
+		if modified, err := store.Modified(); modified || err != nil {
+			if err = store.Load(); err != nil {
+				return nil, nil, err
+			}
+		}
+		imageList, err := store.ByRepository(repository)
+		if err != nil && err != ErrImageUnknown {
+			return nil, nil, err
+		}
+		for _, image := range imageList {
+			for _, tag := range image.Tags[repository] {
+				tags[tag] = image
+			}
+			for _, digest := range image.Digests {
+				digests[digest] = image
+			}
+		}
+	}
+	return tags, digests, nil
+}
+
 func (s *store) Container(id string) (*Container, error) {
 	rcstore, err := s.ContainerStore()
 	if err != nil {
@@ -3161,6 +3202,14 @@ func copyStringDigestMap(m map[string]digest.Digest) map[string]digest.Digest {
 	ret := make(map[string]digest.Digest, len(m))
 	for k, v := range m {
 		ret[k] = v
+	}
+	return ret
+}
+
+func copyStringStringSliceMap(m map[string][]string) map[string][]string {
+	ret := make(map[string][]string, len(m))
+	for k, v := range m {
+		ret[k] = copyStringSlice(v)
 	}
 	return ret
 }
