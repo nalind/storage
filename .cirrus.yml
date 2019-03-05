@@ -1,0 +1,63 @@
+container:
+  image: fedora
+
+env:
+  GOPATH: /tmp/go
+  GOREPO: github.com/containers/storage
+  RUNDIR: ${GOPATH}/src/${GOREPO}
+  PATH: ${PATH}:${GOPATH}/bin
+  GIMME_GO_VERSION: stable
+
+validate_task:
+  setup_script:
+  - ./.cirrus-setup.sh
+  validate_script:
+  - eval `gimme`
+  - make -C ${RUNDIR} binary
+  - make -C ${RUNDIR} local-validate
+
+compile_task:
+  depends_on:
+  - validate
+  - on_kernels
+  matrix:
+    - container:
+        image: fedora:28
+        image: fedora:29
+        image: centos:7
+        image: ubuntu:xenial
+        image: ubuntu:bionic
+    - osx_instance:
+        image: mojave-xcode-10.1
+    - freebsd_instance:
+        image: freebsd-12-0-release-amd64
+  env:
+    matrix:
+      GIMME_GO_VERSION: 1.10
+      GIMME_GO_VERSION: 1.11
+      GIMME_GO_VERSION: 1.12
+  setup_script:
+  - ./.cirrus-setup.sh
+  build_script:
+  - eval `gimme`
+  - make -C ${RUNDIR} binary
+  integration_test_script:
+  - eval `gimme`
+  - make -C ${RUNDIR} local-test-integration
+
+on_kernels_task:
+  matrix:
+    - osx_instance:
+        image: mojave-xcode-10.1
+    - freebsd_instance:
+        image: freebsd-12-0-release-amd64
+  depends_on:
+  - validate
+  setup_script:
+  - ./.cirrus-setup.sh
+  unit_test_script:
+  - eval `gimme`
+  - make -C ${RUNDIR} local-test-unit
+  integration_test_script:
+  - eval `gimme`
+  - make -C ${RUNDIR} local-test-integration
