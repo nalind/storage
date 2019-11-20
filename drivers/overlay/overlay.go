@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	graphdriver "github.com/containers/storage/drivers"
 	"github.com/containers/storage/drivers/overlayutils"
@@ -1050,14 +1051,31 @@ func (d *Driver) Put(id string) error {
 		}
 	}
 
+	maybeRetry := func(fn func() error, shouldRetry func(err error) bool, maxRetries int) (int, error) {
+		retries := 0
+		err := fn()
+		for err != nil && shouldRetry(err) {
+			time.Sleep(50 * time.Millisecond)
+			err = fn()
+			retries++
+			if retries > maxRetries {
+				break
+			}
+		}
+		return retries, err
+	}
+	retryOnBusyOrInval := func(err error) bool {
+		return err == unix.EBUSY || err == unix.EINVAL
+	}
 	if !unmounted {
-		if err := unix.Unmount(mountpoint, unix.MNT_DETACH); err != nil && !os.IsNotExist(err) {
-			logrus.Debugf("Failed to unmount %s overlay: %s - %v", id, mountpoint, err)
+		retries, err := maybeRetry(func() error { return unix.Unmount(mountpoint, unix.MNT_DETACH) }, retryOnBusyOrInval, 50)
+		if err != nil && !os.IsNotExist(err) {
+			logrus.Debugf("Failed to unmount %s overlay (retried %d times): %s - %v", id, retries, mountpoint, err)
 		}
 	}
-
-	if err := unix.Rmdir(mountpoint); err != nil && !os.IsNotExist(err) {
-		logrus.Debugf("Failed to remove mountpoint %s overlay: %s - %v", id, mountpoint, err)
+	retries, err := maybeRetry(func() error { return unix.Rmdir(mountpoint) }, retryOnBusyOrInval, 50)
+	if err != nil && !os.IsNotExist(err) {
+		logrus.Debugf("Failed to remove mountpoint %s overlay (retried %d times): %s - %v", id, retries, mountpoint, err)
 	}
 
 	return nil
