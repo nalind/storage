@@ -75,6 +75,39 @@ func getRootlessGID() int {
 	return os.Getegid()
 }
 
+func binaryIsNotSUID(newidmapCmd string) string {
+	newidmapPath, err := exec.LookPath(newidmapCmd)
+	if err != nil {
+		// not there? whatever
+		return ""
+	}
+	st, err := os.Stat(newidmapPath)
+	if err != nil {
+		// not accessible? whatever
+		return ""
+	}
+	if st.Mode()&syscall.S_ISUID == syscall.S_ISUID || st.Mode()&syscall.S_ISGID == syscall.S_ISGID {
+		// is setuid or setgid, treat that as ok for whatever it needed to do
+		return ""
+	}
+	value := make([]byte, 65536)
+	sz, err := syscall.Getxattr(newidmapPath, "security.capability", value)
+	if err != nil || sz == 0 {
+		// is not setuid, has no capability set on it, how's that supposed to even work?
+		return fmt.Sprintf("%q is not setuid or setgid and does not have file capabilities set", newidmapPath)
+	}
+	if capabilities, err := capability.NewFile2(newidmapPath); err == nil {
+		// check if any of the right capability bits is set
+		effective := capability.EFFECTIVE
+		setuid := capability.CAP_SETUID
+		setgid := capability.CAP_SETGID
+		if !capabilities.Get(effective, setuid) && !capabilities.Get(effective, setgid) {
+			return fmt.Sprintf("capabilities %q on %q don't include %q or %q", capabilities, newidmapPath, setuid, setgid)
+		}
+	}
+	return ""
+}
+
 func (c *Cmd) Start() error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
@@ -223,6 +256,9 @@ func (c *Cmd) Start() error {
 					gidmapSet = true
 				} else {
 					logrus.Warnf("error running newgidmap: %v: %s", err, g.String())
+					if warning := binaryIsNotSUID("newgidmap"); warning != "" {
+						logrus.Warn(warning)
+					}
 					logrus.Warnf("falling back to single mapping")
 					g.Reset()
 					g.Write([]byte(fmt.Sprintf("0 %d 1\n", os.Getegid())))
@@ -272,6 +308,9 @@ func (c *Cmd) Start() error {
 					uidmapSet = true
 				} else {
 					logrus.Warnf("error running newuidmap: %v: %s", err, u.String())
+					if warning := binaryIsNotSUID("newuidmap"); warning != "" {
+						logrus.Warn(warning)
+					}
 					logrus.Warnf("falling back to single mapping")
 					u.Reset()
 					u.Write([]byte(fmt.Sprintf("0 %d 1\n", os.Geteuid())))
