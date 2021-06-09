@@ -9,46 +9,51 @@ import (
 	"testing"
 )
 
-// Size of an empty directory should be 0
-func TestSizeEmpty(t *testing.T) {
+// Usage of an empty directory should be 0
+func TestUsageEmpty(t *testing.T) {
 	var dir string
 	var err error
-	if dir, err = ioutil.TempDir(os.TempDir(), "testSizeEmptyDirectory"); err != nil {
+	if dir, err = ioutil.TempDir(os.TempDir(), "testUsageEmptyDirectory"); err != nil {
 		t.Fatalf("failed to create directory: %s", err)
 	}
+	defer os.RemoveAll(dir)
 
-	var size int64
-	if size, _ = Size(dir); size != 0 {
-		t.Fatalf("empty directory has size: %d", size)
-	}
+	usage, _ := Usage(dir)
+	expectSizeAndInodeCount(t, "empty directory", usage, &DiskUsage{
+		Size:       0,
+		InodeCount: 1,
+	})
 }
 
-// Size of a directory with one empty file should be 0
-func TestSizeEmptyFile(t *testing.T) {
+// Usage of one empty file should be 0
+func TestUsageEmptyFile(t *testing.T) {
 	var dir string
 	var err error
-	if dir, err = ioutil.TempDir(os.TempDir(), "testSizeEmptyFile"); err != nil {
+	if dir, err = ioutil.TempDir(os.TempDir(), "testUsageEmptyFile"); err != nil {
 		t.Fatalf("failed to create directory: %s", err)
 	}
+	defer os.RemoveAll(dir)
 
 	var file *os.File
 	if file, err = ioutil.TempFile(dir, "file"); err != nil {
 		t.Fatalf("failed to create file: %s", err)
 	}
 
-	var size int64
-	if size, _ = Size(file.Name()); size != 0 {
-		t.Fatalf("directory with one file has size: %d", size)
-	}
+	usage, _ := Usage(file.Name())
+	expectSizeAndInodeCount(t, "one file", usage, &DiskUsage{
+		Size:       0,
+		InodeCount: 1,
+	})
 }
 
-// Size of a directory with one 5-byte file should be 5
-func TestSizeNonemptyFile(t *testing.T) {
+// Usage of a directory with one 5-byte file should be 5
+func TestUsageNonemptyFile(t *testing.T) {
 	var dir string
 	var err error
-	if dir, err = ioutil.TempDir(os.TempDir(), "testSizeNonemptyFile"); err != nil {
+	if dir, err = ioutil.TempDir(os.TempDir(), "testUsageNonemptyFile"); err != nil {
 		t.Fatalf("failed to create directory: %s", err)
 	}
+	defer os.RemoveAll(dir)
 
 	var file *os.File
 	if file, err = ioutil.TempFile(dir, "file"); err != nil {
@@ -58,37 +63,57 @@ func TestSizeNonemptyFile(t *testing.T) {
 	d := []byte{97, 98, 99, 100, 101}
 	file.Write(d)
 
-	var size int64
-	if size, _ = Size(file.Name()); size != 5 {
-		t.Fatalf("directory with one 5-byte file has size: %d", size)
-	}
+	usage, _ := Usage(dir)
+	expectSizeAndInodeCount(t, "directory with one 5-byte file", usage, &DiskUsage{
+		Size:       5,
+		InodeCount: 2,
+	})
 }
 
-// Size of a directory with one empty directory should be 0
-func TestSizeNestedDirectoryEmpty(t *testing.T) {
+// Usage of an empty directory should be 0
+func TestUsageEmptyDirectory(t *testing.T) {
 	var dir string
 	var err error
-	if dir, err = ioutil.TempDir(os.TempDir(), "testSizeNestedDirectoryEmpty"); err != nil {
+	if dir, err = ioutil.TempDir(os.TempDir(), "testUsageEmptyDirectory"); err != nil {
 		t.Fatalf("failed to create directory: %s", err)
 	}
-	if dir, err = ioutil.TempDir(dir, "nested"); err != nil {
+	defer os.RemoveAll(dir)
+
+	usage, _ := Usage(dir)
+	expectSizeAndInodeCount(t, "one directory", usage, &DiskUsage{
+		Size:       0,
+		InodeCount: 1,
+	})
+}
+
+// Usage of a directory with one empty directory should be 0
+func TestUsageNestedDirectoryEmpty(t *testing.T) {
+	var dir string
+	var err error
+	if dir, err = ioutil.TempDir(os.TempDir(), "testUsageNestedDirectoryEmpty"); err != nil {
+		t.Fatalf("failed to create directory: %s", err)
+	}
+	defer os.RemoveAll(dir)
+	if _, err = ioutil.TempDir(dir, "nested"); err != nil {
 		t.Fatalf("failed to create nested directory: %s", err)
 	}
 
-	var size int64
-	if size, _ = Size(dir); size != 0 {
-		t.Fatalf("directory with one empty directory has size: %d", size)
-	}
+	usage, _ := Usage(dir)
+	expectSizeAndInodeCount(t, "directory with one empty directory", usage, &DiskUsage{
+		Size:       0,
+		InodeCount: 2,
+	})
 }
 
 // Test directory with 1 file and 1 empty directory
-func TestSizeFileAndNestedDirectoryEmpty(t *testing.T) {
+func TestUsageFileAndNestedDirectoryEmpty(t *testing.T) {
 	var dir string
 	var err error
-	if dir, err = ioutil.TempDir(os.TempDir(), "testSizeFileAndNestedDirectoryEmpty"); err != nil {
+	if dir, err = ioutil.TempDir(os.TempDir(), "testUsageFileAndNestedDirectoryEmpty"); err != nil {
 		t.Fatalf("failed to create directory: %s", err)
 	}
-	if dir, err = ioutil.TempDir(dir, "nested"); err != nil {
+	defer os.RemoveAll(dir)
+	if _, err = ioutil.TempDir(dir, "nested"); err != nil {
 		t.Fatalf("failed to create nested directory: %s", err)
 	}
 
@@ -100,19 +125,21 @@ func TestSizeFileAndNestedDirectoryEmpty(t *testing.T) {
 	d := []byte{100, 111, 99, 107, 101, 114}
 	file.Write(d)
 
-	var size int64
-	if size, _ = Size(dir); size != 6 {
-		t.Fatalf("directory with 6-byte file and empty directory has size: %d", size)
-	}
+	usage, _ := Usage(dir)
+	expectSizeAndInodeCount(t, "directory with 6-byte file and empty directory", usage, &DiskUsage{
+		Size:       6,
+		InodeCount: 3,
+	})
 }
 
 // Test directory with 1 file and 1 non-empty directory
-func TestSizeFileAndNestedDirectoryNonempty(t *testing.T) {
+func TestUsageFileAndNestedDirectoryNonempty(t *testing.T) {
 	var dir, dirNested string
 	var err error
-	if dir, err = ioutil.TempDir(os.TempDir(), "TestSizeFileAndNestedDirectoryNonempty"); err != nil {
+	if dir, err = ioutil.TempDir(os.TempDir(), "TestUsageFileAndNestedDirectoryNonempty"); err != nil {
 		t.Fatalf("failed to create directory: %s", err)
 	}
+	defer os.RemoveAll(dir)
 	if dirNested, err = ioutil.TempDir(dir, "nested"); err != nil {
 		t.Fatalf("failed to create nested directory: %s", err)
 	}
@@ -133,10 +160,11 @@ func TestSizeFileAndNestedDirectoryNonempty(t *testing.T) {
 	nestedData := []byte{100, 111, 99, 107, 101, 114}
 	nestedFile.Write(nestedData)
 
-	var size int64
-	if size, _ = Size(dir); size != 12 {
-		t.Fatalf("directory with 6-byte file and nested directory with 6-byte file has size: %d", size)
-	}
+	usage, _ := Usage(dir)
+	expectSizeAndInodeCount(t, "directory with 6-byte file and nested directory with 6-byte file", usage, &DiskUsage{
+		Size:       12,
+		InodeCount: 4,
+	})
 }
 
 // Test migration of directory to a subdir underneath itself
@@ -147,6 +175,7 @@ func TestMoveToSubdir(t *testing.T) {
 	if outerDir, err = ioutil.TempDir(os.TempDir(), "TestMoveToSubdir"); err != nil {
 		t.Fatalf("failed to create directory: %v", err)
 	}
+	defer os.RemoveAll(outerDir)
 
 	if subDir, err = ioutil.TempDir(outerDir, "testSub"); err != nil {
 		t.Fatalf("failed to create subdirectory: %v", err)
@@ -185,8 +214,19 @@ func TestMoveToSubdir(t *testing.T) {
 }
 
 // Test a non-existing directory
-func TestSizeNonExistingDirectory(t *testing.T) {
-	if _, err := Size("/thisdirectoryshouldnotexist/TestSizeNonExistingDirectory"); err == nil {
+func TestUsageNonExistingDirectory(t *testing.T) {
+	if _, err := Usage("/thisdirectoryshouldnotexist/TestUsageNonExistingDirectory"); err == nil {
 		t.Fatalf("error is expected")
+	}
+}
+
+// A helper function that tests expectation of inode count and dir size against
+// the found usage.
+func expectSizeAndInodeCount(t *testing.T, testName string, current, expected *DiskUsage) {
+	if current.Size != expected.Size {
+		t.Errorf("%s has size: %d, expected %d", testName, current.Size, expected.Size)
+	}
+	if current.InodeCount != expected.InodeCount {
+		t.Errorf("%s has inode count: %d, expected %d", testName, current.InodeCount, expected.InodeCount)
 	}
 }

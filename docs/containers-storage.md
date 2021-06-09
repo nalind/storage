@@ -50,9 +50,6 @@ configuration data which is recommended for use in *containers* which derive
 from the *image*.  It is also expected that a *container*'s run-time
 configuration will be stored as data items.
 
-Files belonging to a *readonly* *layer* will become deduplicated with *OSTree* if the configuration option *storage.ostree_repo* for saving the corresponding OSTree repository is provided.
-This option won't work if *containers-storage* gets built without support for OSTree.
-
 ## SUB-COMMANDS
 The *containers-storage* command's features are broken down into several subcommands:
  **containers-storage add-names(1)**           Add layer, image, or container name or names
@@ -138,7 +135,7 @@ Increases the amount of debugging information which is printed.
 Overrides the root of the storage tree, used for storing layer contents and
 information about layers, images, and containers.
 
-**--run, -R=/var/run/containers/storage**
+**--run, -R=/run/containers/storage**
 
 Overrides the root of the runtime state tree, currently used mainly for noting
 the location where a given layer is mounted (see **containers-storage mount**) so that
@@ -158,6 +155,10 @@ Set options which will be passed to the storage driver.  If not set, but
 comma-separated list and used instead.  If the storage tree has previously been
 initialized, these need not be provided.
 
+## ENVIRONMENT OVERRIDES
+**CONTAINERS_STORAGE_CONF** 
+
+If set will use the configuration file path provided in *$CONTAINERS_STORAGE_CONF* instead of the default `/etc/containers/storage.conf`.
 ## EXAMPLES
 **containers-storage layers -t**
 
@@ -166,3 +167,10 @@ This is still a work in progress, so some functionality may not yet be
 implemented, and some will be removed if it is found to be unnecessary.  That
 said, if anything isn't working correctly, please report it to [the project's
 issue tracker] (https://github.com/containers/storage/issues).
+
+## FOOTNOTES
+The Containers Storage project is committed to inclusivity, a core value of open source.
+The `master` and `slave` mount propagation terminology is used in this repository.
+This language is problematic and divisive, and should be changed.
+However, these terms are currently used within the Linux kernel and must be used as-is at this time.
+When the kernel maintainers rectify this usage, Containers Storage will follow suit immediately.

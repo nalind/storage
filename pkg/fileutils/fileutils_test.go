@@ -14,6 +14,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const windows = "windows"
+
 // CopyFile with invalid src
 func TestCopyFileWithInvalidSrc(t *testing.T) {
 	tempFolder, err := ioutil.TempDir("", "storage-fileutils-test")
@@ -109,8 +111,11 @@ func TestCopyFile(t *testing.T) {
 	}
 	src := path.Join(tempFolder, "src")
 	dest := path.Join(tempFolder, "dest")
-	ioutil.WriteFile(src, []byte("content"), 0777)
-	ioutil.WriteFile(dest, []byte("destContent"), 0777)
+	err = ioutil.WriteFile(src, []byte("content"), 0777)
+	require.NoError(t, err)
+
+	err = ioutil.WriteFile(dest, []byte("destContent"), 0777)
+	require.NoError(t, err)
 	bytes, err := CopyFile(src, dest)
 	if err != nil {
 		t.Fatal(err)
@@ -130,7 +135,7 @@ func TestCopyFile(t *testing.T) {
 // Reading a symlink to a directory must return the directory
 func TestReadSymlinkedDirectoryExistingDirectory(t *testing.T) {
 	// TODO Windows: Port this test
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == windows {
 		t.Skip("Needs porting to Windows")
 	}
 	var err error
@@ -176,7 +181,7 @@ func TestReadSymlinkedDirectoryNonExistingSymlink(t *testing.T) {
 // Reading a symlink to a file must fail
 func TestReadSymlinkedDirectoryToFile(t *testing.T) {
 	// TODO Windows: Port this test
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == windows {
 		t.Skip("Needs porting to Windows")
 	}
 	var err error
@@ -225,11 +230,11 @@ func TestPatternMatches(t *testing.T) {
 	}
 }
 
-// An exclusion followed by an inclusion should return true.
+// An exclusion followed by an inclusion should return false.
 func TestExclusionPatternMatchesPatternBefore(t *testing.T) {
 	match, _ := Matches("fileutils.go", []string{"!fileutils.go", "*.go"})
 	if !match {
-		t.Errorf("failed to get true match on exclusion pattern, got %v", match)
+		t.Errorf("failed to get false match on exclusion pattern, got %v", match)
 	}
 }
 
@@ -306,87 +311,112 @@ func TestMatchesWithMalformedPatterns(t *testing.T) {
 type matchesTestCase struct {
 	pattern string
 	text    string
-	pass    bool
+	fail    bool
+	match   bool
 }
 
 func TestMatches(t *testing.T) {
 	tests := []matchesTestCase{
-		{"**", "file", true},
-		{"**", "file/", true},
-		{"**/", "file", true}, // weird one
-		{"**/", "file/", true},
-		{"**", "/", true},
-		{"**/", "/", true},
-		{"**", "dir/file", true},
-		{"**/", "dir/file", true},
-		{"**", "dir/file/", true},
-		{"**/", "dir/file/", true},
-		{"**/**", "dir/file", true},
-		{"**/**", "dir/file/", true},
-		{"dir/**", "dir/file", true},
-		{"dir/**", "dir/file/", true},
-		{"dir/**", "dir/dir2/file", true},
-		{"dir/**", "dir/dir2/file/", true},
-		{"**/dir2/*", "dir/dir2/file", true},
-		{"**/dir2/*", "dir/dir2/file/", true},
-		{"**/dir2/**", "dir/dir2/dir3/file", true},
-		{"**/dir2/**", "dir/dir2/dir3/file/", true},
-		{"**file", "file", true},
-		{"**file", "dir/file", true},
-		{"**/file", "dir/file", true},
-		{"**file", "dir/dir/file", true},
-		{"**/file", "dir/dir/file", true},
-		{"**/file*", "dir/dir/file", true},
-		{"**/file*", "dir/dir/file.txt", true},
-		{"**/file*txt", "dir/dir/file.txt", true},
-		{"**/file*.txt", "dir/dir/file.txt", true},
-		{"**/file*.txt*", "dir/dir/file.txt", true},
-		{"**/**/*.txt", "dir/dir/file.txt", true},
-		{"**/**/*.txt2", "dir/dir/file.txt", false},
-		{"**/*.txt", "file.txt", true},
-		{"**/**/*.txt", "file.txt", true},
-		{"a**/*.txt", "a/file.txt", true},
-		{"a**/*.txt", "a/dir/file.txt", true},
-		{"a**/*.txt", "a/dir/dir/file.txt", true},
-		{"a/*.txt", "a/dir/file.txt", false},
-		{"a/*.txt", "a/file.txt", true},
-		{"a/*.txt**", "a/file.txt", true},
-		{"a[b-d]e", "ae", false},
-		{"a[b-d]e", "ace", true},
-		{"a[b-d]e", "aae", false},
-		{"a[^b-d]e", "aze", true},
-		{".*", ".foo", true},
-		{".*", "foo", false},
-		{"abc.def", "abcdef", false},
-		{"abc.def", "abc.def", true},
-		{"abc.def", "abcZdef", false},
-		{"abc?def", "abcZdef", true},
-		{"abc?def", "abcdef", false},
-		{"a\\\\", "a\\", true},
-		{"**/foo/bar", "foo/bar", true},
-		{"**/foo/bar", "dir/foo/bar", true},
-		{"**/foo/bar", "dir/dir2/foo/bar", true},
-		{"abc/**", "abc", false},
-		{"abc/**", "abc/def", true},
-		{"abc/**", "abc/def/ghi", true},
-		{"**/.foo", ".foo", true},
-		{"**/.foo", "bar.foo", false},
+		{"**", "file", false, true},
+		{"**", "file/", false, true},
+		{"**/", "file", false, true}, // weird one
+		{"**/", "file/", false, true},
+		{"**", "/", false, true},
+		{"**/", "/", false, true},
+		{"**", "dir/file", false, true},
+		{"**/", "dir/file", false, true},
+		{"**", "dir/file/", false, true},
+		{"**/", "dir/file/", false, true},
+		{"**/**", "dir/file", false, true},
+		{"**/**", "dir/file/", false, true},
+		{"dir/**", "dir/file", false, true},
+		{"dir/**", "dir/file/", false, true},
+		{"dir/**", "dir/dir2/file", false, true},
+		{"dir/**", "dir/dir2/file/", false, true},
+		{"**/dir", "dir/", false, true},
+		{"**/dir", "dir/file", false, true},
+		{"**/dir", "dir/dir2/file", false, true},
+		{"**/dir", "dir1/dir/", false, true},
+		{"**/dir", "dir1/dir/file", false, true},
+		{"**/dir", "dir1/dir/dir2/file", false, true},
+		{"**/dir", "dir1/dir2/dir/", false, true},
+		{"**/dir", "dir1/dir2/dir/file", false, true},
+		{"**/dir", "dir1/dir2/dir/dir3/file", false, true},
+		{"**/dir2/*", "dir/dir2/file", false, true},
+		{"**/dir2/*", "dir/dir2/file/", false, true},
+		{"**/dir2/**", "dir/dir2/dir3/file", false, true},
+		{"**/dir2/**", "dir/dir2/dir3/file/", false, true},
+		{"**file", "file", false, true},
+		{"**file", "dir/file", false, true},
+		{"**/file", "dir/file", false, true},
+		{"**file", "dir/dir/file", false, true},
+		{"**/file", "dir/dir/file", false, true},
+		{"**/file*", "dir/dir/file", false, true},
+		{"**/file*", "dir/dir/file.txt", false, true},
+		{"**/file*txt", "dir/dir/file.txt", false, true},
+		{"**/file*.txt", "dir/dir/file.txt", false, true},
+		{"**/file*.txt*", "dir/dir/file.txt", false, true},
+		{"**/**/*.txt", "dir/dir/file.txt", false, true},
+		{"**/**/*.txt2", "dir/dir/file.txt", false, false},
+		{"**/*.txt", "file.txt", false, true},
+		{"**/**/*.txt", "file.txt", false, true},
+		{"a**/*.txt", "a/file.txt", false, true},
+		{"a**/*.txt", "a/dir/file.txt", false, true},
+		{"a**/*.txt", "a/dir/dir/file.txt", false, true},
+		{"a/*.txt", "a/dir/file.txt", false, false},
+		{"a/*.txt", "a/file.txt", false, true},
+		{"a/*.txt**", "a/file.txt", false, true},
+		{"a[b-d]e", "ae", false, false},
+		{"a[b-d]e", "ace", false, true},
+		{"a[b-d]e", "aae", false, false},
+		{"a[^b-d]e", "aze", false, true},
+		{".*", ".foo", false, true},
+		{".*", "foo", false, false},
+		{"abc.def", "abcdef", false, false},
+		{"abc.def", "abc.def", false, true},
+		{"abc.def", "abcZdef", false, false},
+		{"abc?def", "abcZdef", false, true},
+		{"abc?def", "abcdef", false, false},
+		{"a\\\\", "a\\", false, true},
+		{"**/foo/bar", "foo/bar", false, true},
+		{"**/foo/bar", "dir/foo/bar", false, true},
+		{"**/foo/bar", "dir/dir2/foo/bar", false, true},
+		{"abc/**", "abc", false, false},
+		{"abc/**", "abc/def", false, true},
+		{"abc/**", "abc/def/ghi", false, true},
+		{"**/.foo", ".foo", false, true},
+		{"**/.foo", "bar.foo", false, false},
 	}
 
-	if runtime.GOOS != "windows" {
+	if runtime.GOOS != windows {
 		tests = append(tests, []matchesTestCase{
-			{"a\\*b", "a*b", true},
-			{"a\\", "a", false},
-			{"a\\", "a\\", false},
+			{"a\\*b", "a*b", false, true},
+			{"a\\", "a", true, false},
+			{"a\\", "a\\", true, false},
+			{"a\\", "a$", true, false},
 		}...)
 	}
 
+	_, err := filepath.Match("[", "")
+	badPatternsCaughtEarly := err == filepath.ErrBadPattern
+
 	for _, test := range tests {
 		desc := fmt.Sprintf("pattern=%q text=%q", test.pattern, test.text)
-		pm, err := NewPatternMatcher([]string{test.pattern})
-		require.NoError(t, err, desc)
-		res, _ := pm.Matches(test.text)
-		assert.Equal(t, test.pass, res, desc)
+		t.Run(desc, func(t *testing.T) {
+			pm, err := NewPatternMatcher([]string{test.pattern})
+			if test.fail && badPatternsCaughtEarly {
+				assert.Equal(t, err, filepath.ErrBadPattern) // pm is nil, we're done
+			} else {
+				require.NoError(t, err, desc)
+				res, err := pm.MatchesResult(test.text)
+				if test.fail {
+					assert.Equal(t, err, filepath.ErrBadPattern)
+				} else {
+					assert.Nil(t, err)
+					assert.Equal(t, test.match, res.isMatched, desc)
+				}
+			}
+		})
 	}
 }
 
@@ -575,7 +605,7 @@ func TestMatch(t *testing.T) {
 	for _, tt := range matchTests {
 		pattern := tt.pattern
 		s := tt.s
-		if runtime.GOOS == "windows" {
+		if runtime.GOOS == windows {
 			if strings.Contains(pattern, "\\") {
 				// no escape allowed on windows.
 				continue
@@ -587,5 +617,39 @@ func TestMatch(t *testing.T) {
 		if ok != tt.match || err != tt.err {
 			t.Fatalf("Match(%#q, %#q) = %v, %q want %v, %q", pattern, s, ok, errp(err), tt.match, errp(tt.err))
 		}
+	}
+}
+
+func TestMatchesAmount(t *testing.T) {
+	testData := []struct {
+		patterns []string
+		input    string
+		matches  uint
+		excludes uint
+		isMatch  bool
+	}{
+		{[]string{"1", "2", "3"}, "2", 1, 0, true},
+		{[]string{"2", "!2", "!2"}, "2", 1, 2, false},
+		{[]string{"1", "2", "2"}, "2", 2, 0, true},
+		{[]string{"1", "2", "2", "2"}, "2", 3, 0, true},
+		{[]string{"/prefix/path", "/prefix/other"}, "/prefix/path", 1, 0, true},
+		{[]string{"/prefix*", "/prefix/path"}, "/prefix/path", 2, 0, true},
+		{[]string{"/prefix*", "!/prefix/path"}, "/prefix/match", 1, 0, true},
+		{[]string{"/prefix*", "!/prefix/path"}, "/prefix/path", 1, 1, false},
+	}
+
+	for _, testCase := range testData {
+		pm, err := NewPatternMatcher(testCase.patterns)
+		require.NoError(t, err)
+		res, err := pm.MatchesResult(testCase.input)
+		require.NoError(t, err)
+		desc := fmt.Sprintf("pattern=%q input=%q", testCase.patterns, testCase.input)
+		assert.Equal(t, testCase.excludes, res.Excludes(), desc)
+		assert.Equal(t, testCase.matches, res.Matches(), desc)
+		assert.Equal(t, testCase.isMatch, res.IsMatched(), desc)
+
+		isMatch, err := pm.IsMatch(testCase.input)
+		require.NoError(t, err)
+		assert.Equal(t, testCase.isMatch, isMatch, desc)
 	}
 }

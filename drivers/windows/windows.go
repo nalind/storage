@@ -3,9 +3,9 @@
 package windows
 
 import (
+	"archive/tar"
 	"bufio"
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -21,11 +21,11 @@ import (
 	"unsafe"
 
 	"github.com/Microsoft/go-winio"
-	"github.com/Microsoft/go-winio/archive/tar"
 	"github.com/Microsoft/go-winio/backuptar"
 	"github.com/Microsoft/hcsshim"
 	"github.com/containers/storage/drivers"
 	"github.com/containers/storage/pkg/archive"
+	"github.com/containers/storage/pkg/directory"
 	"github.com/containers/storage/pkg/idtools"
 	"github.com/containers/storage/pkg/ioutils"
 	"github.com/containers/storage/pkg/longpath"
@@ -372,7 +372,15 @@ func (d *Driver) Get(id string, options graphdriver.MountOpts) (string, error) {
 	logrus.Debugf("WindowsGraphDriver Get() id %s mountLabel %s", id, options.MountLabel)
 	var dir string
 
-	if len(options.Options) > 0 {
+	switch len(options.Options) {
+	case 0:
+	case 1:
+		if options.Options[0] == "ro" {
+			// ignore "ro" option
+			break
+		}
+		fallthrough
+	default:
 		return "", fmt.Errorf("windows driver does not support mount options")
 	}
 	rID, err := d.resolveID(id)
@@ -426,6 +434,12 @@ func (d *Driver) Get(id string, options graphdriver.MountOpts) (string, error) {
 	}
 
 	return dir, nil
+}
+
+// ReadWriteDiskUsage returns the disk usage of the writable directory for the ID.
+// For VFS, it queries the directory for this ID.
+func (d *Driver) ReadWriteDiskUsage(id string) (*directory.DiskUsage, error) {
+	return directory.Usage(d.dir(id))
 }
 
 // Put adds a new layer to the driver.
@@ -581,7 +595,7 @@ func (d *Driver) Changes(id string, idMappings *idtools.IDMappings, parent strin
 // layer with the specified id and parent, returning the size of the
 // new layer in bytes.
 // The layer should not be mounted when calling this function
-func (d *Driver) ApplyDiff(id string, idMappings *idtools.IDMappings, parent, mountLabel string, diff io.Reader) (int64, error) {
+func (d *Driver) ApplyDiff(id, parent string, options graphdriver.ApplyDiffOpts) (int64, error) {
 	panicIfUsedByLcow()
 	var layerChain []string
 	if parent != "" {
@@ -601,7 +615,7 @@ func (d *Driver) ApplyDiff(id string, idMappings *idtools.IDMappings, parent, mo
 		layerChain = append(layerChain, parentChain...)
 	}
 
-	size, err := d.importLayer(id, diff, layerChain)
+	size, err := d.importLayer(id, options.Diff, layerChain)
 	if err != nil {
 		return 0, err
 	}
