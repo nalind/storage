@@ -12,7 +12,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/containers/storage/pkg/idtools"
 	"github.com/stretchr/testify/assert"
@@ -23,7 +22,7 @@ var tmp string
 
 func init() {
 	tmp = "/tmp/"
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == windows {
 		tmp = os.Getenv("TEMP") + `\`
 	}
 }
@@ -73,7 +72,7 @@ func TestIsArchivePathInvalidFile(t *testing.T) {
 
 func TestIsArchivePathTar(t *testing.T) {
 	var whichTar string
-	if runtime.GOOS == "solaris" {
+	if runtime.GOOS == solaris {
 		whichTar = "gtar"
 	} else {
 		whichTar = "tar"
@@ -127,7 +126,7 @@ func TestDecompressStreamBzip2(t *testing.T) {
 }
 
 func TestDecompressStreamXz(t *testing.T) {
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == windows {
 		t.Skip("Xz not present in msys2")
 	}
 	testDecompressStream(t, "xz", "xz -f")
@@ -136,7 +135,7 @@ func TestDecompressStreamXz(t *testing.T) {
 func TestCompressStreamXzUnsupported(t *testing.T) {
 	dest, err := os.Create(tmp + "dest")
 	if err != nil {
-		t.Fatalf("Fail to create the destination file")
+		t.Fatalf("Fail to create the destination file: %v", err)
 	}
 	defer dest.Close()
 
@@ -149,7 +148,7 @@ func TestCompressStreamXzUnsupported(t *testing.T) {
 func TestCompressStreamBzip2Unsupported(t *testing.T) {
 	dest, err := os.Create(tmp + "dest")
 	if err != nil {
-		t.Fatalf("Fail to create the destination file")
+		t.Fatalf("Fail to create the destination file: %v", err)
 	}
 	defer dest.Close()
 
@@ -162,7 +161,7 @@ func TestCompressStreamBzip2Unsupported(t *testing.T) {
 func TestCompressStreamInvalid(t *testing.T) {
 	dest, err := os.Create(tmp + "dest")
 	if err != nil {
-		t.Fatalf("Fail to create the destination file")
+		t.Fatalf("Fail to create the destination file: %v", err)
 	}
 	defer dest.Close()
 
@@ -209,59 +208,6 @@ func TestExtensionXz(t *testing.T) {
 	}
 }
 
-func TestCmdStreamLargeStderr(t *testing.T) {
-	cmd := exec.Command("sh", "-c", "dd if=/dev/zero bs=1k count=1000 of=/dev/stderr; echo hello")
-	out, _, err := cmdStream(cmd, nil)
-	if err != nil {
-		t.Fatalf("Failed to start command: %s", err)
-	}
-	errCh := make(chan error)
-	go func() {
-		_, err := io.Copy(ioutil.Discard, out)
-		errCh <- err
-	}()
-	select {
-	case err := <-errCh:
-		if err != nil {
-			t.Fatalf("Command should not have failed (err=%.100s...)", err)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatalf("Command did not complete in 5 seconds; probable deadlock")
-	}
-}
-
-func TestCmdStreamBad(t *testing.T) {
-	// TODO Windows: Figure out why this is failing in CI but not locally
-	if runtime.GOOS == "windows" {
-		t.Skip("Failing on Windows CI machines")
-	}
-	badCmd := exec.Command("sh", "-c", "echo hello; echo >&2 error couldn\\'t reverse the phase pulser; exit 1")
-	out, _, err := cmdStream(badCmd, nil)
-	if err != nil {
-		t.Fatalf("Failed to start command: %s", err)
-	}
-	if output, err := ioutil.ReadAll(out); err == nil {
-		t.Fatalf("Command should have failed")
-	} else if err.Error() != "exit status 1: error couldn't reverse the phase pulser\n" {
-		t.Fatalf("Wrong error value (%s)", err)
-	} else if s := string(output); s != "hello\n" {
-		t.Fatalf("Command output should be '%s', not '%s'", "hello\\n", output)
-	}
-}
-
-func TestCmdStreamGood(t *testing.T) {
-	cmd := exec.Command("sh", "-c", "echo hello; exit 0")
-	out, _, err := cmdStream(cmd, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if output, err := ioutil.ReadAll(out); err != nil {
-		t.Fatalf("Command should not have failed (err=%s)", err)
-	} else if s := string(output); s != "hello\n" {
-		t.Fatalf("Command output should be '%s', not '%s'", "hello\\n", output)
-	}
-}
-
 func TestUntarPathWithInvalidDest(t *testing.T) {
 	tempFolder, err := ioutil.TempDir("", "storage-archive-test")
 	require.NoError(t, err)
@@ -276,7 +222,7 @@ func TestUntarPathWithInvalidDest(t *testing.T) {
 	// Translate back to Unix semantics as next exec.Command is run under sh
 	srcFileU := srcFile
 	tarFileU := tarFile
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == windows {
 		tarFileU = "/tmp/" + filepath.Base(filepath.Dir(tarFile)) + "/src.tar"
 		srcFileU = "/tmp/" + filepath.Base(filepath.Dir(srcFile)) + "/src"
 	}
@@ -320,7 +266,7 @@ func TestUntarPath(t *testing.T) {
 	// Translate back to Unix semantics as next exec.Command is run under sh
 	srcFileU := srcFile
 	tarFileU := tarFile
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == windows {
 		tarFileU = "/tmp/" + filepath.Base(filepath.Dir(tarFile)) + "/src.tar"
 		srcFileU = "/tmp/" + filepath.Base(filepath.Dir(srcFile)) + "/src"
 	}
@@ -353,7 +299,7 @@ func TestUntarPathWithDestinationFile(t *testing.T) {
 	// Translate back to Unix semantics as next exec.Command is run under sh
 	srcFileU := srcFile
 	tarFileU := tarFile
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == windows {
 		tarFileU = "/tmp/" + filepath.Base(filepath.Dir(tarFile)) + "/src.tar"
 		srcFileU = "/tmp/" + filepath.Base(filepath.Dir(srcFile)) + "/src"
 	}
@@ -389,7 +335,7 @@ func TestUntarPathWithDestinationSrcFileAsFolder(t *testing.T) {
 	// Translate back to Unix semantics as next exec.Command is run under sh
 	srcFileU := srcFile
 	tarFileU := tarFile
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == windows {
 		tarFileU = "/tmp/" + filepath.Base(filepath.Dir(tarFile)) + "/src.tar"
 		srcFileU = "/tmp/" + filepath.Base(filepath.Dir(srcFile)) + "/src"
 	}
@@ -472,15 +418,51 @@ func TestCopyWithTarSrcFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ioutil.WriteFile(src, []byte("content"), 0777)
+	err = ioutil.WriteFile(src, []byte("content"), 0777)
+	if err != nil {
+		t.Fatalf("archiver.CopyWithTar couldn't write content, %s.", err)
+	}
+	err = defaultCopyWithTar(src, dest)
+	if err == nil {
+		t.Fatalf("archiver.CopyWithTar should have thrown an overwrite error.")
+	} else if _, isOverwriteError := err.(overwriteError); !isOverwriteError {
+		t.Fatalf("archiver.CopyWithTar shouldn't throw an error other than overwrite, %s.", err)
+	}
+	err = os.Remove(dest)
+	if err != nil {
+		t.Fatalf("archiver.CopyWithTar couldn't remove dest dir, %s.", err)
+	}
 	err = defaultCopyWithTar(src, dest)
 	if err != nil {
-		t.Fatalf("archiver.CopyWithTar shouldn't throw an error, %s.", err)
+		t.Fatalf("archiver.CopyWithTar shouldn't have thrown an error, %s.", err)
 	}
-	_, err = os.Stat(dest)
-	// FIXME Check the content
+	err = ioutil.WriteFile(dest, []byte("modified content"), 0751)
 	if err != nil {
-		t.Fatalf("Destination file should be the same as the source.")
+		t.Fatalf("archiver.CopyWithTar couldn't write modified content, %s.", err)
+	}
+	err = defaultCopyWithTar(src, dest)
+	if err != nil {
+		t.Fatalf("archiver.CopyWithTar shouldn't have thrown an error, %s.", err)
+	}
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		t.Fatalf("archiver.CopyWithTar should be able to stat the source, %s.", err)
+	}
+	destInfo, err := os.Stat(dest)
+	if err != nil {
+		t.Fatalf("archiver.CopyWithTar should be able to stat the destination, %s.", err)
+	}
+	if srcInfo.IsDir() != destInfo.IsDir() {
+		t.Fatalf("Destination (dir=%t) should be the same as the source (dir=%t).", destInfo.IsDir(), srcInfo.IsDir())
+	}
+	if srcInfo.Mode() != destInfo.Mode() {
+		t.Fatalf("Destination (mode=%0o) should be the same as the source (mode=%0o).", destInfo.Mode(), srcInfo.Mode())
+	}
+	if srcInfo.Size() != destInfo.Size() {
+		t.Fatalf("Destination (size=%d) should be the same as the source (size=%d).", destInfo.Size(), srcInfo.Size())
+	}
+	if !srcInfo.ModTime().Equal(destInfo.ModTime()) {
+		t.Fatalf("Destination (date=%s) should be the same as the source (date=%s).", destInfo.ModTime(), srcInfo.ModTime())
 	}
 }
 
@@ -606,7 +588,7 @@ func TestCopyFileWithTarSrcFile(t *testing.T) {
 
 func TestTarFiles(t *testing.T) {
 	// TODO Windows: Figure out how to port this test.
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == windows {
 		t.Skip("Failing on Windows")
 	}
 	// try without hardlinks
@@ -688,7 +670,7 @@ func tarUntar(t *testing.T, origin string, options *TarOptions) ([]Change, error
 
 func TestTarUntar(t *testing.T) {
 	// TODO Windows: Figure out how to fix this test.
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == windows {
 		t.Skip("Failing on Windows")
 	}
 	origin, err := ioutil.TempDir("", "storage-test-untar-origin")
@@ -778,7 +760,7 @@ func TestTarWithOptionsChownOptsAlwaysOverridesIdPair(t *testing.T) {
 
 func TestTarWithOptions(t *testing.T) {
 	// TODO Windows: Figure out how to fix this test.
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == windows {
 		t.Skip("Failing on Windows")
 	}
 	origin, err := ioutil.TempDir("", "storage-test-untar-origin")
@@ -828,7 +810,8 @@ func TestTypeXGlobalHeaderDoesNotFail(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(tmpDir)
-	err = createTarFile(filepath.Join(tmpDir, "pax_global_header"), tmpDir, &hdr, nil, true, nil, false)
+	buffer := make([]byte, 1<<20)
+	err = createTarFile(filepath.Join(tmpDir, "pax_global_header"), tmpDir, &hdr, nil, true, nil, false, false, nil, buffer)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -940,7 +923,7 @@ func BenchmarkTarUntarWithLinks(b *testing.B) {
 
 func TestUntarInvalidFilenames(t *testing.T) {
 	// TODO Windows: Figure out how to fix this test.
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == windows {
 		t.Skip("Passes but hits breakoutError: platform and architecture is not supported")
 	}
 	for i, headers := range [][]*tar.Header{
@@ -968,7 +951,7 @@ func TestUntarInvalidFilenames(t *testing.T) {
 
 func TestUntarHardlinkToSymlink(t *testing.T) {
 	// TODO Windows. There may be a way of running this, but turning off for now
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == windows {
 		t.Skip("hardlinks on Windows")
 	}
 	for i, headers := range [][]*tar.Header{
@@ -1000,7 +983,7 @@ func TestUntarHardlinkToSymlink(t *testing.T) {
 
 func TestUntarInvalidHardlink(t *testing.T) {
 	// TODO Windows. There may be a way of running this, but turning off for now
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == windows {
 		t.Skip("hardlinks on Windows")
 	}
 	for i, headers := range [][]*tar.Header{
@@ -1084,7 +1067,7 @@ func TestUntarInvalidHardlink(t *testing.T) {
 
 func TestUntarInvalidSymlink(t *testing.T) {
 	// TODO Windows. There may be a way of running this, but turning off for now
-	if runtime.GOOS == "windows" {
+	if runtime.GOOS == windows {
 		t.Skip("hardlinks on Windows")
 	}
 	for i, headers := range [][]*tar.Header{

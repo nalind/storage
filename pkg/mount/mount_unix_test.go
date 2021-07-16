@@ -1,4 +1,4 @@
-// +build !windows,!solaris
+// +build linux
 
 package mount
 
@@ -25,6 +25,10 @@ func TestMountOptionsParsing(t *testing.T) {
 }
 
 func TestMounted(t *testing.T) {
+	if os.Getuid() != 0 {
+		t.Skip("root required")
+	}
+
 	tmp := path.Join(os.TempDir(), "mount-tests")
 	if err := os.MkdirAll(tmp, 0777); err != nil {
 		t.Fatal(err)
@@ -38,14 +42,22 @@ func TestMounted(t *testing.T) {
 		targetPath = path.Join(targetDir, "file.txt")
 	)
 
-	os.Mkdir(sourceDir, 0777)
-	os.Mkdir(targetDir, 0777)
+	if err := os.Mkdir(sourceDir, 0777); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.Mkdir(targetDir, 0777); err != nil {
+		t.Fatal(err)
+	}
 
 	f, err := os.Create(sourcePath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.WriteString("hello")
+	if _, err = f.WriteString("hello"); err != nil {
+		t.Fatal(err)
+	}
+
 	f.Close()
 
 	f, err = os.Create(targetPath)
@@ -54,7 +66,7 @@ func TestMounted(t *testing.T) {
 	}
 	f.Close()
 
-	if err := Mount(sourceDir, targetDir, "none", "bind,rw"); err != nil {
+	if err := Mount(sourceDir, targetDir, none, "bind,rw"); err != nil {
 		t.Fatal(err)
 	}
 	defer func() {
@@ -76,6 +88,10 @@ func TestMounted(t *testing.T) {
 }
 
 func TestMountReadonly(t *testing.T) {
+	if os.Getuid() != 0 {
+		t.Skip("root required")
+	}
+
 	tmp := path.Join(os.TempDir(), "mount-tests")
 	if err := os.MkdirAll(tmp, 0777); err != nil {
 		t.Fatal(err)
@@ -89,14 +105,21 @@ func TestMountReadonly(t *testing.T) {
 		targetPath = path.Join(targetDir, "file.txt")
 	)
 
-	os.Mkdir(sourceDir, 0777)
-	os.Mkdir(targetDir, 0777)
+	if err := os.Mkdir(sourceDir, 0777); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(targetDir, 0777); err != nil {
+		t.Fatal(err)
+	}
 
 	f, err := os.Create(sourcePath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.WriteString("hello")
+	_, err = f.WriteString("hello")
+	if err != nil {
+		t.Fatal(err)
+	}
 	f.Close()
 
 	f, err = os.Create(targetPath)
@@ -105,7 +128,7 @@ func TestMountReadonly(t *testing.T) {
 	}
 	f.Close()
 
-	if err := Mount(sourceDir, targetDir, "none", "bind,ro"); err != nil {
+	if err := Mount(sourceDir, targetDir, none, "bind,ro"); err != nil {
 		t.Fatal(err)
 	}
 	defer func() {
@@ -116,6 +139,7 @@ func TestMountReadonly(t *testing.T) {
 
 	f, err = os.OpenFile(targetPath, os.O_RDWR, 0777)
 	if err == nil {
+		f.Close()
 		t.Fatal("Should not be able to open a ro file as rw")
 	}
 }

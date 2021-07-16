@@ -35,7 +35,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/containers/storage/drivers"
+	graphdriver "github.com/containers/storage/drivers"
 	"github.com/containers/storage/pkg/archive"
 	"github.com/containers/storage/pkg/chrootarchive"
 	"github.com/containers/storage/pkg/directory"
@@ -44,7 +44,7 @@ import (
 	mountpk "github.com/containers/storage/pkg/mount"
 	"github.com/containers/storage/pkg/parsers"
 	"github.com/containers/storage/pkg/system"
-	rsystem "github.com/opencontainers/runc/libcontainer/system"
+	"github.com/opencontainers/runc/libcontainer/userns"
 	"github.com/opencontainers/selinux/go-selinux/label"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -62,6 +62,8 @@ var (
 	enableDirpermLock sync.Once
 	enableDirperm     bool
 )
+
+const defaultPerms = os.FileMode(0555)
 
 func init() {
 	graphdriver.Register("aufs", Init)
@@ -196,7 +198,7 @@ func supportsAufs() error {
 	// proc/filesystems for when aufs is supported
 	exec.Command("modprobe", "aufs").Run()
 
-	if rsystem.RunningInUserNS() {
+	if userns.RunningInUserNS() {
 		return ErrAufsNested
 	}
 
@@ -312,20 +314,22 @@ func (a *Driver) createDirsFor(id, parent string) error {
 		"diff",
 	}
 
-	// Directory permission is 0755.
+	// Directory permission is 0555.
 	// The path of directories are <aufs_root_path>/mnt/<image_id>
 	// and <aufs_root_path>/diff/<image_id>
 	for _, p := range paths {
 		rootPair := idtools.NewIDMappingsFromMaps(a.uidMaps, a.gidMaps).RootPair()
+		rootPerms := defaultPerms
 		if parent != "" {
 			st, err := system.Stat(path.Join(a.rootPath(), p, parent))
 			if err != nil {
 				return err
 			}
+			rootPerms = os.FileMode(st.Mode())
 			rootPair.UID = int(st.UID())
 			rootPair.GID = int(st.GID())
 		}
-		if err := idtools.MkdirAllAndChownNew(path.Join(a.rootPath(), p, id), os.FileMode(0755), rootPair); err != nil {
+		if err := idtools.MkdirAllAndChownNew(path.Join(a.rootPath(), p, id), rootPerms, rootPair); err != nil {
 			return err
 		}
 	}
@@ -482,6 +486,21 @@ func (a *Driver) Put(id string) error {
 	return err
 }
 
+// ReadWriteDiskUsage returns the disk usage of the writable directory for the ID.
+// For AUFS, it queries the mountpoint for this ID.
+func (a *Driver) ReadWriteDiskUsage(id string) (*directory.DiskUsage, error) {
+	a.locker.Lock(id)
+	defer a.locker.Unlock(id)
+	a.pathCacheLock.Lock()
+	m, exists := a.pathCache[id]
+	if !exists {
+		m = a.getMountpoint(id)
+		a.pathCache[id] = m
+	}
+	a.pathCacheLock.Unlock()
+	return directory.Usage(m)
+}
+
 // isParent returns if the passed in parent is the direct parent of the passed in layer
 func (a *Driver) isParent(id, parent string) bool {
 	parents, _ := getParentIDs(a.rootPath(), id)
@@ -550,13 +569,13 @@ func (a *Driver) DiffSize(id string, idMappings *idtools.IDMappings, parent stri
 // ApplyDiff extracts the changeset from the given diff into the
 // layer with the specified id and parent, returning the size of the
 // new layer in bytes.
-func (a *Driver) ApplyDiff(id string, idMappings *idtools.IDMappings, parent, mountLabel string, diff io.Reader) (size int64, err error) {
+func (a *Driver) ApplyDiff(id, parent string, options graphdriver.ApplyDiffOpts) (size int64, err error) {
 	if !a.isParent(id, parent) {
-		return a.naiveDiff.ApplyDiff(id, idMappings, parent, mountLabel, diff)
+		return a.naiveDiff.ApplyDiff(id, parent, options)
 	}
 
 	// AUFS doesn't need the parent id to apply the diff if it is the direct parent.
-	if err = a.applyDiff(id, idMappings, diff); err != nil {
+	if err = a.applyDiff(id, options.Mappings, options.Diff); err != nil {
 		return
 	}
 

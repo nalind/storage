@@ -1,0 +1,21 @@
+# github.com/cpuguy83/go-md2man v1.0.10
+github.com/cpuguy83/go-md2man
+github.com/cpuguy83/go-md2man/md2man
+# github.com/hashicorp/go-version v1.2.0
+github.com/hashicorp/go-version
+# github.com/konsorten/go-windows-terminal-sequences v1.0.1
+github.com/konsorten/go-windows-terminal-sequences
+# github.com/russross/blackfriday v1.5.2
+github.com/russross/blackfriday
+# github.com/sirupsen/logrus v1.4.1
+github.com/sirupsen/logrus
+# github.com/vbatts/git-validation v1.0.0
+github.com/vbatts/git-validation
+github.com/vbatts/git-validation/git
+github.com/vbatts/git-validation/rules/danglingwhitespace
+github.com/vbatts/git-validation/rules/dco
+github.com/vbatts/git-validation/rules/messageregexp
+github.com/vbatts/git-validation/rules/shortsubject
+github.com/vbatts/git-validation/validate
+# golang.org/x/sys v0.0.0-20180905080454-ebe1bf3edb33
+golang.org/x/sys/unix

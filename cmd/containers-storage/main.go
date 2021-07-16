@@ -5,9 +5,10 @@ import (
 	"os"
 
 	"github.com/containers/storage"
-	"github.com/containers/storage/opts"
+	"github.com/containers/storage/internal/opts"
 	"github.com/containers/storage/pkg/mflag"
 	"github.com/containers/storage/pkg/reexec"
+	"github.com/containers/storage/types"
 	"github.com/sirupsen/logrus"
 )
 
@@ -32,7 +33,7 @@ func main() {
 		return
 	}
 
-	options := storage.StoreOptions{}
+	options := types.StoreOptions{}
 	debug := false
 
 	makeFlags := func(command string, eh mflag.ErrorHandling) *mflag.FlagSet {
@@ -67,7 +68,7 @@ func main() {
 	}
 
 	if options.GraphRoot == "" && options.RunRoot == "" && options.GraphDriverName == "" && len(options.GraphDriverOptions) == 0 {
-		options, _ = storage.DefaultStoreOptionsAutoDetectUID()
+		options, _ = types.DefaultStoreOptionsAutoDetectUID()
 	}
 	args := flags.Args()
 	if len(args) < 1 {
@@ -120,6 +121,7 @@ func main() {
 					fmt.Printf("error initializing: %+v\n", err)
 					os.Exit(1)
 				}
+				store.Free()
 				os.Exit(command.action(flags, cmd, store, args))
 				break
 			}

@@ -1,6 +1,8 @@
 package archive
 
 import (
+	"archive/tar"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -26,7 +28,7 @@ func setupOverlayTestDir(t *testing.T, src string) {
 	err := os.Mkdir(filepath.Join(src, "d1"), 0700)
 	require.NoError(t, err)
 
-	err = system.Lsetxattr(filepath.Join(src, "d1"), "trusted.overlay.opaque", []byte("y"), 0)
+	err = system.Lsetxattr(filepath.Join(src, "d1"), getOverlayOpaqueXattrName(), []byte("y"), 0)
 	require.NoError(t, err)
 
 	err = ioutil.WriteFile(filepath.Join(src, "d1", "f1"), []byte{}, 0600)
@@ -36,7 +38,7 @@ func setupOverlayTestDir(t *testing.T, src string) {
 	err = os.Mkdir(filepath.Join(src, "d2"), 0750)
 	require.NoError(t, err)
 
-	err = system.Lsetxattr(filepath.Join(src, "d2"), "trusted.overlay.opaque", []byte("y"), 0)
+	err = system.Lsetxattr(filepath.Join(src, "d2"), getOverlayOpaqueXattrName(), []byte("y"), 0)
 	require.NoError(t, err)
 
 	err = ioutil.WriteFile(filepath.Join(src, "d2", "f1"), []byte{}, 0660)
@@ -60,7 +62,7 @@ func setupOverlayLowerDir(t *testing.T, lower string) {
 }
 
 func checkOpaqueness(t *testing.T, path string, opaque string) {
-	xattrOpaque, err := system.Lgetxattr(path, "trusted.overlay.opaque")
+	xattrOpaque, err := system.Lgetxattr(path, getOverlayOpaqueXattrName())
 	require.NoError(t, err)
 
 	if string(xattrOpaque) != opaque {
@@ -179,4 +181,38 @@ func TestOverlayTarAUFSUntar(t *testing.T) {
 	checkFileMode(t, filepath.Join(dst, "d1", "f1"), 0600)
 	checkFileMode(t, filepath.Join(dst, "d2", "f1"), 0660)
 	checkFileMode(t, filepath.Join(dst, "d3", WhiteoutPrefix+"f1"), 0600)
+}
+
+func TestNestedOverlayWhiteouts(t *testing.T) {
+	reader, writer := io.Pipe()
+
+	go func() {
+		tw := tar.NewWriter(writer)
+		require.NoError(t, tw.WriteHeader(&tar.Header{
+			Typeflag: tar.TypeReg,
+			Name:     ".wh.foo",
+			Size:     0,
+			Uid:      os.Geteuid(),
+			Gid:      os.Getegid(),
+		}))
+		require.NoError(t, tw.WriteHeader(&tar.Header{
+			Typeflag: tar.TypeReg,
+			Name:     "foo/.wh.bar",
+			Size:     0,
+			Uid:      os.Geteuid(),
+			Gid:      os.Getegid(),
+		}))
+		require.NoError(t, tw.Close())
+	}()
+
+	dst, err := ioutil.TempDir("", "storage-test-overlay-tar-dst")
+	require.NoError(t, err)
+	defer os.RemoveAll(dst)
+
+	err = Untar(reader, dst, &TarOptions{
+		Compression:    Uncompressed,
+		WhiteoutFormat: OverlayWhiteoutFormat,
+	})
+	require.NoError(t, err)
+	checkFileMode(t, filepath.Join(dst, "foo"), os.ModeDevice|os.ModeCharDevice)
 }

@@ -1,4 +1,4 @@
-// +build linux
+// +build linux,cgo
 
 package btrfs
 
@@ -7,7 +7,7 @@ import (
 	"path"
 	"testing"
 
-	"github.com/containers/storage/drivers"
+	graphdriver "github.com/containers/storage/drivers"
 	"github.com/containers/storage/drivers/graphtest"
 )
 

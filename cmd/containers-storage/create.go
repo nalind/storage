@@ -8,9 +8,10 @@ import (
 	"os"
 
 	"github.com/containers/storage"
-	"github.com/containers/storage/opts"
+	"github.com/containers/storage/internal/opts"
 	"github.com/containers/storage/pkg/idtools"
 	"github.com/containers/storage/pkg/mflag"
+	"github.com/containers/storage/types"
 	digest "github.com/opencontainers/go-digest"
 )
 
@@ -30,10 +31,12 @@ var (
 	paramGIDMap       = ""
 	paramSubUIDMap    = ""
 	paramSubGIDMap    = ""
+	paramReadOnly     = false
+	paramVolatile     = false
 )
 
-func paramIDMapping() (*storage.IDMappingOptions, error) {
-	options := storage.IDMappingOptions{
+func paramIDMapping() (*types.IDMappingOptions, error) {
+	options := types.IDMappingOptions{
 		HostUIDMapping: paramHostUIDMap,
 		HostGIDMapping: paramHostGIDMap,
 	}
@@ -148,7 +151,10 @@ func createImage(flags *mflag.FlagSet, action string, m storage.Store, args []st
 		}
 		paramMetadata = string(b)
 	}
-	layer := args[0]
+	layer := ""
+	if len(args) > 0 {
+		layer = args[0]
+	}
 	imageOptions := &storage.ImageOptions{
 		Digest: digest.Digest(paramDigest),
 	}
@@ -187,7 +193,7 @@ func createContainer(flags *mflag.FlagSet, action string, m storage.Store, args 
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		return 1
 	}
-	options := &storage.ContainerOptions{IDMappingOptions: *mappings}
+	options := &storage.ContainerOptions{IDMappingOptions: *mappings, Volatile: paramVolatile}
 	image := args[0]
 	container, err := m.CreateContainer(paramID, paramNames, image, paramLayer, paramMetadata, options)
 	if err != nil {
@@ -251,7 +257,7 @@ func init() {
 		names:       []string{"create-image", "createimage"},
 		optionsHelp: "[options [...]] topLayerNameOrID",
 		usage:       "Create a new image using layers",
-		minArgs:     1,
+		minArgs:     0,
 		maxArgs:     1,
 		action:      createImage,
 		addFlags: func(flags *mflag.FlagSet, cmd *command) {
@@ -272,6 +278,7 @@ func init() {
 		action:      createContainer,
 		addFlags: func(flags *mflag.FlagSet, cmd *command) {
 			flags.Var(opts.NewListOptsRef(&paramNames, nil), []string{"-name", "n"}, "Container name")
+			flags.BoolVar(&paramVolatile, []string{"-volatile"}, false, "Mark as volatile")
 			flags.StringVar(&paramID, []string{"-id", "i"}, "", "Container ID")
 			flags.StringVar(&paramMetadata, []string{"-metadata", "m"}, "", "Metadata")
 			flags.StringVar(&paramMetadataFile, []string{"-metadata-file", "f"}, "", "Metadata File")
