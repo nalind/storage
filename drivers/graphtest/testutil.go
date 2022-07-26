@@ -2,6 +2,7 @@ package graphtest
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -109,7 +110,7 @@ func checkFileRemoved(drv graphdriver.Driver, layer, filename string) error {
 
 	if _, err := os.Stat(path.Join(root, filename)); err == nil {
 		return fmt.Errorf("file still exists: %s", path.Join(root, filename))
-	} else if !os.IsNotExist(err) {
+	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 

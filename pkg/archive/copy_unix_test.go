@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -148,7 +149,7 @@ func TestCopyErrSrcNotExists(t *testing.T) {
 	tmpDirA, tmpDirB := getTestTempDirs(t)
 	defer removeAllPaths(tmpDirA, tmpDirB)
 
-	if _, err := CopyInfoSourcePath(filepath.Join(tmpDirA, "file1"), false); !os.IsNotExist(err) {
+	if _, err := CopyInfoSourcePath(filepath.Join(tmpDirA, "file1"), false); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("expected IsNotExist error, but got %T: %s", err, err)
 	}
 }
@@ -190,7 +191,7 @@ func TestCopyErrDstParentNotExists(t *testing.T) {
 		t.Fatal("expected IsNotExist error, but got nil instead")
 	}
 
-	if !os.IsNotExist(err) {
+	if !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("expected IsNotExist error, but got %T: %s", err, err)
 	}
 
@@ -208,7 +209,7 @@ func TestCopyErrDstParentNotExists(t *testing.T) {
 		t.Fatal("expected IsNotExist error, but got nil instead")
 	}
 
-	if !os.IsNotExist(err) {
+	if !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("expected IsNotExist error, but got %T: %s", err, err)
 	}
 }
@@ -433,7 +434,7 @@ func TestCopyCaseD(t *testing.T) {
 	var err error
 
 	// Ensure that dstPath doesn't exist.
-	if _, err = os.Stat(dstPath); !os.IsNotExist(err) {
+	if _, err = os.Stat(dstPath); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("did not expect dstPath %q to exist", dstPath)
 	}
 
@@ -484,7 +485,7 @@ func TestCopyCaseDFSym(t *testing.T) {
 	var err error
 
 	// Ensure that dstPath doesn't exist.
-	if _, err = os.Stat(dstPath); !os.IsNotExist(err) {
+	if _, err = os.Stat(dstPath); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("did not expect dstPath %q to exist", dstPath)
 	}
 

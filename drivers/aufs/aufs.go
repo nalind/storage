@@ -147,7 +147,7 @@ func Init(home string, options graphdriver.Options) (graphdriver.Driver, error) 
 	// if it already exists
 	// If not populate the dir structure
 	if err := idtools.MkdirAllAs(home, 0700, rootUID, rootGID); err != nil {
-		if os.IsExist(err) {
+		if errors.Is(err, os.ErrExist) {
 			return a, nil
 		}
 		return nil, err
@@ -359,7 +359,7 @@ func (a *Driver) Remove(id string) error {
 	for {
 		mounted, err := a.mounted(mountpoint)
 		if err != nil {
-			if os.IsNotExist(err) {
+			if errors.Is(err, os.ErrNotExist) {
 				break
 			}
 			return err
@@ -386,7 +386,7 @@ func (a *Driver) Remove(id string) error {
 	}
 
 	// Remove the layers file for the id
-	if err := os.Remove(path.Join(a.rootPath(), "layers", id)); err != nil && !os.IsNotExist(err) {
+	if err := os.Remove(path.Join(a.rootPath(), "layers", id)); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("removing layers dir for %s: %w", id, err)
 	}
 
@@ -415,10 +415,10 @@ func atomicRemove(source string) error {
 
 	err := os.Rename(source, target)
 	switch {
-	case err == nil, os.IsNotExist(err):
-	case os.IsExist(err):
+	case err == nil, errors.Is(err, os.ErrNotExist):
+	case errors.Is(err, os.ErrExist):
 		// Got error saying the target dir already exists, maybe the source doesn't exist due to a previous (failed) remove
-		if _, e := os.Stat(source); !os.IsNotExist(e) {
+		if _, e := os.Stat(source); !errors.Is(e, os.ErrNotExist) {
 			return fmt.Errorf("target rename dir '%s' exists but should not, this needs to be manually cleaned up: %w", target, err)
 		}
 	default:
@@ -434,7 +434,7 @@ func (a *Driver) Get(id string, options graphdriver.MountOpts) (string, error) {
 	a.locker.Lock(id)
 	defer a.locker.Unlock(id)
 	parents, err := a.getParentLayerPaths(id)
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return "", err
 	}
 

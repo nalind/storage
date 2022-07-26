@@ -1,6 +1,7 @@
 package chrootarchive
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -71,7 +72,7 @@ func chroot(path string) (err error) {
 		errCleanup := os.Remove(pivotDir)
 		// pivotDir doesn't exist if pivot_root failed and chroot+chdir was successful
 		// because we already cleaned it up on failed pivot_root
-		if errCleanup != nil && !os.IsNotExist(errCleanup) {
+		if errCleanup != nil && !errors.Is(errCleanup, os.ErrNotExist) {
 			errCleanup = fmt.Errorf("cleaning up after pivot: %w", errCleanup)
 			if err == nil {
 				err = errCleanup

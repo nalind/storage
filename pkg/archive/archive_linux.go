@@ -2,6 +2,7 @@ package archive
 
 import (
 	"archive/tar"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -59,7 +60,7 @@ func (o overlayWhiteoutConverter) ConvertWrite(hdr *tar.Header, path string, fi 
 			// layers, then it was newly-created here, so it wasn't also deleted here.
 			for _, rolayer := range o.rolayers {
 				stat, statErr := os.Stat(filepath.Join(rolayer, hdr.Name))
-				if statErr != nil && !os.IsNotExist(statErr) && !isENOTDIR(statErr) {
+				if statErr != nil && !errors.Is(statErr, os.ErrNotExist) && !isENOTDIR(statErr) {
 					// Not sure what happened here.
 					return nil, statErr
 				}
@@ -90,7 +91,7 @@ func (o overlayWhiteoutConverter) ConvertWrite(hdr *tar.Header, path string, fi 
 				for dir := filepath.Dir(hdr.Name); dir != "" && dir != "." && dir != string(os.PathSeparator); dir = filepath.Dir(dir) {
 					// Check for whiteout for a parent directory in a parent layer.
 					stat, statErr := os.Stat(filepath.Join(rolayer, dir))
-					if statErr != nil && !os.IsNotExist(statErr) && !isENOTDIR(statErr) {
+					if statErr != nil && !errors.Is(statErr, os.ErrNotExist) && !isENOTDIR(statErr) {
 						// Not sure what happened here.
 						return nil, statErr
 					}

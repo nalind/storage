@@ -86,7 +86,7 @@ func TestSubtreePrivate(t *testing.T) {
 	}()
 
 	// check that this file _does_not_ show in the _target_
-	if _, err := os.Stat(outside1CheckPath); err != nil && !os.IsNotExist(err) {
+	if _, err := os.Stat(outside1CheckPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		t.Fatal(err)
 	} else if err == nil {
 		t.Fatalf("%q should not be visible, but is", outside1CheckPath)
@@ -103,7 +103,7 @@ func TestSubtreePrivate(t *testing.T) {
 	}()
 
 	// check that this file _does_not_ show in the _source_
-	if _, err := os.Stat(outside2CheckPath); err != nil && !os.IsNotExist(err) {
+	if _, err := os.Stat(outside2CheckPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		t.Fatal(err)
 	} else if err == nil {
 		t.Fatalf("%q should not be visible, but is", outside2CheckPath)
@@ -285,7 +285,7 @@ func TestSubtreeSharedSlave(t *testing.T) {
 	}()
 
 	// check that this file _does_not_ show in the _source_
-	if _, err := os.Stat(outside2CheckPath); err != nil && !os.IsNotExist(err) {
+	if _, err := os.Stat(outside2CheckPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		t.Fatal(err)
 	} else if err == nil {
 		t.Fatalf("%q should not be visible, but is", outside2CheckPath)

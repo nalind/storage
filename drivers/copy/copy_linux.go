@@ -180,7 +180,7 @@ func DirCopy(srcDir, dstDir string, copyMode Mode, copyXattrs bool) error {
 			}
 
 		case mode.IsDir():
-			if err := os.Mkdir(dstPath, f.Mode()); err != nil && !os.IsExist(err) {
+			if err := os.Mkdir(dstPath, f.Mode()); err != nil && !errors.Is(err, os.ErrExist) {
 				return err
 			}
 

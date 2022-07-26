@@ -1018,7 +1018,7 @@ loop:
 			// Not the root directory, ensure that the parent directory exists
 			parent := filepath.Dir(hdr.Name)
 			parentPath := filepath.Join(dest, parent)
-			if _, err := os.Lstat(parentPath); err != nil && os.IsNotExist(err) {
+			if _, err := os.Lstat(parentPath); err != nil && errors.Is(err, os.ErrNotExist) {
 				err = idtools.MkdirAllAndChownNew(parentPath, 0777, rootIDs)
 				if err != nil {
 					return err

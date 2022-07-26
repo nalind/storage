@@ -16,6 +16,7 @@ static void set_name_btrfs_ioctl_vol_args_v2(struct btrfs_ioctl_vol_args_v2* btr
 import "C"
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"io/ioutil"
@@ -259,7 +260,7 @@ func subvolDelete(dirpath, name string, quotaEnabled bool) error {
 	// walk the btrfs subvolumes
 	walkSubvolumes := func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
-			if os.IsNotExist(err) && p != fullPath {
+			if errors.Is(err, os.ErrNotExist) && p != fullPath {
 				// missing most likely because the path was a subvolume that got removed in the previous iteration
 				// since it's gone anyway, we don't care
 				return nil
@@ -596,7 +597,7 @@ func (d *Driver) Remove(id string) error {
 		if err := os.Remove(quotasDir); err != nil {
 			return err
 		}
-	} else if !os.IsNotExist(err) {
+	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 

@@ -424,7 +424,7 @@ func MaybeReexecUsingUserNamespace(evenForRoot bool) {
 	var uidNum, gidNum uint64
 	// Figure out who we are.
 	me, err := user.Current()
-	if !os.IsNotExist(err) {
+	if !errors.Is(err, os.ErrNotExist) {
 		bailOnError(err, "error determining current user")
 		uidNum, err = strconv.ParseUint(me.Uid, 10, 32)
 		bailOnError(err, "error parsing current UID %s", me.Uid)

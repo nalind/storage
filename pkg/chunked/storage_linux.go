@@ -92,7 +92,7 @@ func doHardLink(srcFd int, destDirFd int, destBase string) error {
 	err := doLink()
 
 	// if the destination exists, unlink it first and try again
-	if err != nil && os.IsExist(err) {
+	if err != nil && errors.Is(err, os.ErrExist) {
 		unix.Unlinkat(destDirFd, destBase, 0)
 		return doLink()
 	}
@@ -1065,7 +1065,7 @@ func safeMkdir(dirfd int, mode os.FileMode, name string, metadata *internal.File
 	}
 
 	if err := unix.Mkdirat(parentFd, base, uint32(mode)); err != nil {
-		if !os.IsExist(err) {
+		if !errors.Is(err, os.ErrExist) {
 			return fmt.Errorf("mkdir %q: %w", name, err)
 		}
 	}

@@ -3,6 +3,7 @@ package archive
 import (
 	"archive/tar"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -111,7 +112,7 @@ func aufsWhiteoutPresent(root, path string) (bool, error) {
 	if err == nil {
 		return true, nil
 	}
-	if os.IsNotExist(err) || isENOTDIR(err) {
+	if errors.Is(err, os.ErrNotExist) || isENOTDIR(err) {
 		return false, nil
 	}
 	return false, err
@@ -121,15 +122,7 @@ func isENOTDIR(err error) bool {
 	if err == nil {
 		return false
 	}
-	if err == syscall.ENOTDIR {
-		return true
-	}
-	if perror, ok := err.(*os.PathError); ok {
-		if errno, ok := perror.Err.(syscall.Errno); ok {
-			return errno == syscall.ENOTDIR
-		}
-	}
-	return false
+	return errors.Is(err, syscall.ENOTDIR)
 }
 
 type skipChange func(string) (bool, error)
@@ -208,7 +201,7 @@ func changes(layers []string, rw string, dc deleteChange, sc skipChange, wc whit
 					}
 				}
 				stat, err := os.Stat(filepath.Join(layer, path))
-				if err != nil && !os.IsNotExist(err) {
+				if err != nil && !errors.Is(err, os.ErrNotExist) {
 					return err
 				}
 				if err == nil {
@@ -252,7 +245,7 @@ func changes(layers []string, rw string, dc deleteChange, sc skipChange, wc whit
 		changes = append(changes, change)
 		return nil
 	})
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
 	return changes, nil

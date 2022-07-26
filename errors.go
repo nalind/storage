@@ -2,6 +2,7 @@ package storage
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/containers/storage/types"
 )
@@ -63,3 +64,42 @@ var (
 	// Internal error
 	errInvalidUpdateNameOperation = errors.New("invalid update name operation")
 )
+
+type wrappingError struct {
+	is      error
+	wrapped error
+}
+
+func makeWrappingError(is, wrapped error) error {
+	if is == nil && wrapped == nil {
+		return nil
+	}
+	if is == nil {
+		return wrapped
+	}
+	if wrapped == nil {
+		return is
+	}
+	return &wrappingError{is: is, wrapped: wrapped}
+}
+
+func (w *wrappingError) Error() string {
+	return fmt.Sprintf("%s: %s", w.is.Error(), w.wrapped.Error())
+}
+
+func (w *wrappingError) Is(e error) bool {
+	if w.is == e {
+		return true
+	}
+	if checker, ok := w.is.(interface{ Is(error) bool }); ok && checker.Is(e) {
+		return true
+	}
+	if checker, ok := w.wrapped.(interface{ Is(error) bool }); ok && checker.Is(e) {
+		return true
+	}
+	return false
+}
+
+func (w *wrappingError) Unwrap() error {
+	return w.wrapped
+}

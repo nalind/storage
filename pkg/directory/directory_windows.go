@@ -25,7 +25,7 @@ func Usage(dir string) (usage *DiskUsage, err error) {
 		if err != nil {
 			// if dir does not exist, Size() returns the error.
 			// if dir/x disappeared while walking, Size() ignores dir/x.
-			if os.IsNotExist(err) && path != dir {
+			if errors.Is(err, os.ErrNotExist) && path != dir {
 				return nil
 			}
 			return err

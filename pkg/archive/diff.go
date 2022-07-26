@@ -2,6 +2,7 @@ package archive
 
 import (
 	"archive/tar"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -85,7 +86,7 @@ func UnpackLayer(dest string, layer io.Reader, options *TarOptions) (size int64,
 			parent := filepath.Dir(hdr.Name)
 			parentPath := filepath.Join(dest, parent)
 
-			if _, err := os.Lstat(parentPath); err != nil && os.IsNotExist(err) {
+			if _, err := os.Lstat(parentPath); err != nil && errors.Is(err, os.ErrNotExist) {
 				err = os.MkdirAll(parentPath, 0755)
 				if err != nil {
 					return 0, err
@@ -137,7 +138,7 @@ func UnpackLayer(dest string, layer io.Reader, options *TarOptions) (size int64,
 				}
 				err = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 					if err != nil {
-						if os.IsNotExist(err) {
+						if errors.Is(err, os.ErrNotExist) {
 							err = nil // parent was deleted
 						}
 						return err

@@ -1,8 +1,10 @@
+//go:build linux && cgo
 // +build linux,cgo
 
 package loopback
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"syscall"
@@ -43,7 +45,7 @@ func FindLoopDeviceFor(file *os.File) *os.File {
 
 		file, err := os.OpenFile(path, os.O_RDWR, 0)
 		if err != nil {
-			if os.IsNotExist(err) {
+			if errors.Is(err, os.ErrNotExist) {
 				return nil
 			}
 

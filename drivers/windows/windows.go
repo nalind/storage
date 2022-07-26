@@ -24,7 +24,7 @@ import (
 	"github.com/Microsoft/go-winio"
 	"github.com/Microsoft/go-winio/backuptar"
 	"github.com/Microsoft/hcsshim"
-	"github.com/containers/storage/drivers"
+	graphdriver "github.com/containers/storage/drivers"
 	"github.com/containers/storage/pkg/archive"
 	"github.com/containers/storage/pkg/directory"
 	"github.com/containers/storage/pkg/idtools"
@@ -357,7 +357,7 @@ func (d *Driver) Remove(id string) error {
 	layerPath := filepath.Join(d.info.HomeDir, rID)
 	tmpID := fmt.Sprintf("%s-removing", rID)
 	tmpLayerPath := filepath.Join(d.info.HomeDir, tmpID)
-	if err := os.Rename(layerPath, tmpLayerPath); err != nil && !os.IsNotExist(err) {
+	if err := os.Rename(layerPath, tmpLayerPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	if err := hcsshim.DestroyLayer(d.info, tmpID); err != nil {
@@ -477,7 +477,7 @@ func (d *Driver) Put(id string) error {
 func (d *Driver) Cleanup() error {
 	items, err := ioutil.ReadDir(d.info.HomeDir)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return nil
 		}
 		return err
@@ -871,7 +871,7 @@ func writeLayer(layerData io.Reader, home string, id string, parentLayerPaths ..
 // resolveID computes the layerID information based on the given id.
 func (d *Driver) resolveID(id string) (string, error) {
 	content, err := ioutil.ReadFile(filepath.Join(d.dir(id), "layerID"))
-	if os.IsNotExist(err) {
+	if errors.Is(err, os.ErrNotExist) {
 		return id, nil
 	} else if err != nil {
 		return "", err
@@ -888,7 +888,7 @@ func (d *Driver) setID(id, altID string) error {
 func (d *Driver) getLayerChain(id string) ([]string, error) {
 	jPath := filepath.Join(d.dir(id), "layerchain.json")
 	content, err := ioutil.ReadFile(jPath)
-	if os.IsNotExist(err) {
+	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	} else if err != nil {
 		return nil, fmt.Errorf("unable to read layerchain file - %s", err)

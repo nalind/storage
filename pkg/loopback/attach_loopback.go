@@ -1,3 +1,4 @@
+//go:build linux && cgo
 // +build linux,cgo
 
 package loopback
@@ -54,7 +55,7 @@ func openNextAvailableLoopback(index int, sparseName string, sparseFile *os.File
 
 		fi, err := os.Stat(target)
 		if err != nil {
-			if os.IsNotExist(err) {
+			if errors.Is(err, os.ErrNotExist) {
 				logrus.Error("There are no more loopback devices available.")
 			}
 			return nil, ErrAttachLoopbackDevice

@@ -5,6 +5,7 @@ package idtools
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -29,7 +30,7 @@ func mkdirAs(path string, mode os.FileMode, ownerUID, ownerGID int, mkAll, chown
 	// chown the full directory path if it exists
 	var paths []string
 	st, err := os.Stat(path)
-	if err != nil && os.IsNotExist(err) {
+	if err != nil && errors.Is(err, os.ErrNotExist) {
 		paths = []string{path}
 	} else if err == nil {
 		if !st.IsDir() {
@@ -55,7 +56,7 @@ func mkdirAs(path string, mode os.FileMode, ownerUID, ownerGID int, mkAll, chown
 			if dirPath == "/" {
 				break
 			}
-			if _, err := os.Stat(dirPath); err != nil && os.IsNotExist(err) {
+			if _, err := os.Stat(dirPath); err != nil && errors.Is(err, os.ErrNotExist) {
 				paths = append(paths, dirPath)
 			}
 		}
@@ -63,7 +64,7 @@ func mkdirAs(path string, mode os.FileMode, ownerUID, ownerGID int, mkAll, chown
 			return err
 		}
 	} else {
-		if err := os.Mkdir(path, mode); err != nil && !os.IsExist(err) {
+		if err := os.Mkdir(path, mode); err != nil && !errors.Is(err, os.ErrExist) {
 			return err
 		}
 	}

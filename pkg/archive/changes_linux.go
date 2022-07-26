@@ -211,13 +211,13 @@ func (w *walker) walk(path string, i1, i2 os.FileInfo) (err error) {
 		var cInfo1, cInfo2 os.FileInfo
 		if is1Dir {
 			cInfo1, err = os.Lstat(filepath.Join(w.dir1, fname)) // lstat(2): fs access
-			if err != nil && !os.IsNotExist(err) {
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
 				return err
 			}
 		}
 		if is2Dir {
 			cInfo2, err = os.Lstat(filepath.Join(w.dir2, fname)) // lstat(2): fs access
-			if err != nil && !os.IsNotExist(err) {
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
 				return err
 			}
 		}
@@ -325,7 +325,7 @@ func overlayLowerContainsWhiteout(root, path string) (bool, error) {
 	// Whiteout for a file or directory has the same name, but is for a character
 	// device with major/minor of 0/0.
 	stat, err := os.Stat(filepath.Join(root, path))
-	if err != nil && !os.IsNotExist(err) && !isENOTDIR(err) {
+	if err != nil && !errors.Is(err, os.ErrNotExist) && !isENOTDIR(err) {
 		// Not sure what happened here.
 		return false, err
 	}
@@ -364,7 +364,7 @@ func overlayDeletedFile(layers []string, root, path string, fi os.FileInfo) (str
 	// layers, then it was newly-created here, so it wasn't also deleted here.
 	for _, layer := range layers {
 		stat, err := os.Stat(filepath.Join(layer, path))
-		if err != nil && !os.IsNotExist(err) && !isENOTDIR(err) {
+		if err != nil && !errors.Is(err, os.ErrNotExist) && !isENOTDIR(err) {
 			// Not sure what happened here.
 			return "", err
 		}
@@ -381,7 +381,7 @@ func overlayDeletedFile(layers []string, root, path string, fi os.FileInfo) (str
 		for dir := filepath.Dir(path); dir != "" && dir != string(os.PathSeparator); dir = filepath.Dir(dir) {
 			// Check for whiteout for a parent directory.
 			stat, err := os.Stat(filepath.Join(layer, dir))
-			if err != nil && !os.IsNotExist(err) && !isENOTDIR(err) {
+			if err != nil && !errors.Is(err, os.ErrNotExist) && !isENOTDIR(err) {
 				// Not sure what happened here.
 				return "", err
 			}

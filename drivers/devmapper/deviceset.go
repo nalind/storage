@@ -279,7 +279,7 @@ func (devices *DeviceSet) ensureImage(name string, size int64) (string, error) {
 	}
 
 	if fi, err := os.Stat(filename); err != nil {
-		if !os.IsNotExist(err) {
+		if !errors.Is(err, os.ErrNotExist) {
 			return "", err
 		}
 		logrus.Debugf("devmapper: Creating loopback file %s for device-manage use", filename)
@@ -631,7 +631,7 @@ func (devices *DeviceSet) createFilesystem(info *devInfo) (err error) {
 func (devices *DeviceSet) migrateOldMetaData() error {
 	// Migrate old metadata file
 	jsonData, err := ioutil.ReadFile(devices.oldMetadataFile())
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 
@@ -1191,7 +1191,7 @@ func (devices *DeviceSet) growFS(info *devInfo) error {
 	defer devices.deactivateDevice(info)
 
 	fsMountPoint := "/run/containers/storage/mnt"
-	if _, err := os.Stat(fsMountPoint); os.IsNotExist(err) {
+	if _, err := os.Stat(fsMountPoint); errors.Is(err, os.ErrNotExist) {
 		if err := os.MkdirAll(fsMountPoint, 0700); err != nil {
 			return err
 		}
@@ -1374,7 +1374,7 @@ func (devices *DeviceSet) loadTransactionMetaData() error {
 	if err != nil {
 		// There is no active transaction. This will be the case
 		// during upgrade.
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			devices.OpenTransactionID = devices.TransactionID
 			return nil
 		}
@@ -1455,7 +1455,7 @@ func (devices *DeviceSet) loadDeviceSetMetaData() error {
 	if err != nil {
 		// For backward compatibility return success if file does
 		// not exist.
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return nil
 		}
 		return err

@@ -2,6 +2,7 @@ package chrootarchive
 
 import (
 	stdtar "archive/tar"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -76,7 +77,7 @@ func untarHandler(tarArchive io.Reader, dest string, options *archive.TarOptions
 	rootIDs := idMappings.RootPair()
 
 	dest = filepath.Clean(dest)
-	if _, err := os.Stat(dest); os.IsNotExist(err) {
+	if _, err := os.Stat(dest); errors.Is(err, os.ErrNotExist) {
 		if err := idtools.MkdirAllAndChownNew(dest, 0755, rootIDs); err != nil {
 			return err
 		}

@@ -1,9 +1,11 @@
+//go:build linux && cgo
 // +build linux,cgo
 
 package devmapper
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -18,7 +20,7 @@ import (
 func Mounted(mountpoint string) (bool, error) {
 	var mntpointSt unix.Stat_t
 	if err := unix.Stat(mountpoint, &mntpointSt); err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return false, nil
 		}
 		return false, err

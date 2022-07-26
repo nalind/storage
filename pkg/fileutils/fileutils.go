@@ -304,7 +304,7 @@ func CopyFile(src, dst string) (int64, error) {
 		return 0, err
 	}
 	defer sf.Close()
-	if err := os.Remove(cleanDst); err != nil && !os.IsNotExist(err) {
+	if err := os.Remove(cleanDst); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return 0, err
 	}
 	df, err := os.Create(cleanDst)
@@ -354,7 +354,7 @@ func ReadSymlinkedPath(path string) (realPath string, err error) {
 // CreateIfNotExists creates a file or a directory only if it does not already exist.
 func CreateIfNotExists(path string, isDir bool) error {
 	if _, err := os.Stat(path); err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			if isDir {
 				return os.MkdirAll(path, 0755)
 			}

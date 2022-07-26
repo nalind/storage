@@ -58,7 +58,7 @@ func loadDefaultStoreOptions() {
 			return
 		}
 	} else {
-		if !os.IsNotExist(err) {
+		if !errors.Is(err, os.ErrNotExist) {
 			logrus.Warningf("Attempting to use %s, %v", defaultConfigFile, err)
 		}
 		if err := ReloadConfigurationFileIfNeeded(defaultConfigFile, &defaultStoreOptions); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -95,7 +95,7 @@ func defaultStoreOptionsIsolated(rootless bool, rootlessUID int, storageConf str
 		}
 	}
 	_, err = os.Stat(storageConf)
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return storageOpts, err
 	}
 	if err == nil && !defaultConfigFileSet {
@@ -312,7 +312,7 @@ func ReloadConfigurationFile(configFile string, storeOptions *StoreOptions) erro
 			logrus.Warningf("Failed to decode the keys %q from %q", keys, configFile)
 		}
 	} else {
-		if !os.IsNotExist(err) {
+		if !errors.Is(err, os.ErrNotExist) {
 			fmt.Printf("Failed to read %s %v\n", configFile, err.Error())
 			return err
 		}
@@ -430,7 +430,7 @@ func Save(conf TomlConfig, rootless bool) error {
 		return err
 	}
 
-	if err = os.Remove(configFile); !os.IsNotExist(err) && err != nil {
+	if err = os.Remove(configFile); !errors.Is(err, os.ErrNotExist) && err != nil {
 		return err
 	}
 

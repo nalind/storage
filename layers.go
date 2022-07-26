@@ -345,7 +345,7 @@ func (r *layerStore) Load() error {
 	shouldSave := false
 	rpath := r.layerspath()
 	data, err := ioutil.ReadFile(rpath)
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	layers := []*Layer{}
@@ -436,7 +436,7 @@ func (r *layerStore) loadMounts() error {
 	mounts := make(map[string]*Layer)
 	mpath := r.mountspath()
 	data, err := ioutil.ReadFile(mpath)
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	layerMounts := []layerMountPoint{}
@@ -747,7 +747,7 @@ func (r *layerStore) Put(id string, parentLayer *Layer, names []string, mountLab
 		templateCompressionType = templateLayer.CompressionType
 		templateUIDs, templateGIDs = append([]uint32{}, templateLayer.UIDs...), append([]uint32{}, templateLayer.GIDs...)
 		templateTSdata, tserr = ioutil.ReadFile(r.tspath(templateLayer.ID))
-		if tserr != nil && !os.IsNotExist(tserr) {
+		if tserr != nil && !errors.Is(tserr, os.ErrNotExist) {
 			return nil, -1, tserr
 		}
 	} else {
@@ -1004,7 +1004,7 @@ func (r *layerStore) Unmount(id string, force bool) (bool, error) {
 		return true, r.saveMounts()
 	}
 	err := r.driver.Put(id)
-	if err == nil || os.IsNotExist(err) {
+	if err == nil || errors.Is(err, os.ErrNotExist) {
 		if layer.MountPoint != "" {
 			delete(r.bymount, layer.MountPoint)
 		}
@@ -1554,7 +1554,7 @@ func (r *layerStore) Diff(from, to string, options *DiffOptions) (io.ReadCloser,
 
 	tsfile, err := os.Open(r.tspath(to))
 	if err != nil {
-		if !os.IsNotExist(err) {
+		if !errors.Is(err, os.ErrNotExist) {
 			return nil, err
 		}
 		diff, err := r.driver.Diff(to, r.layerMappings(toLayer), from, r.layerMappings(fromLayer), toLayer.MountLabel)
@@ -1919,7 +1919,7 @@ func (r *layerStore) Modified() (bool, error) {
 	// If the layers.json file has been modified manually, then we have to
 	// reload the storage in any case.
 	info, err := os.Stat(r.layerspath())
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return false, fmt.Errorf("stat layers file: %w", err)
 	}
 	if info != nil {

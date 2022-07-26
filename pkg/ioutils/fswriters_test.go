@@ -2,6 +2,7 @@ package ioutils
 
 import (
 	"bytes"
+	"errors"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -126,7 +127,7 @@ func TestAtomicWriteSetCancel(t *testing.T) {
 
 	if _, err := ioutil.ReadFile(filepath.Join(tmpDir, "target", "foo")); err == nil {
 		t.Fatalf("Expected error reading file where should not exist")
-	} else if !os.IsNotExist(err) {
+	} else if !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("Unexpected error reading file: %s", err)
 	}
 }

@@ -4,6 +4,7 @@
 package directory
 
 import (
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -27,7 +28,7 @@ func Usage(dir string) (usage *DiskUsage, err error) {
 		if err != nil {
 			// if dir does not exist, Usage() returns the error.
 			// if dir/x disappeared while walking, Usage() ignores dir/x.
-			if os.IsNotExist(err) && d != dir {
+			if errors.Is(err, os.ErrNotExist) && d != dir {
 				return nil
 			}
 			return err

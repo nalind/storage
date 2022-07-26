@@ -4,6 +4,7 @@
 package zfs
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -333,7 +334,7 @@ func (d *Driver) create(id, parent string, opts *graphdriver.CreateOpts) error {
 				return err
 			}
 			defer func() {
-				if err := unix.Rmdir(mountpoint); err != nil && !os.IsNotExist(err) {
+				if err := unix.Rmdir(mountpoint); err != nil && !errors.Is(err, os.ErrNotExist) {
 					logrus.Debugf("Failed to remove %s mount point %s: %v", id, mountpoint, err)
 				}
 			}()
@@ -420,7 +421,7 @@ func (d *Driver) Get(id string, options graphdriver.MountOpts) (_ string, retErr
 				if mntErr := unix.Unmount(mountpoint, 0); mntErr != nil {
 					logrus.WithField("storage-driver", "zfs").Errorf("Error unmounting %v: %v", mountpoint, mntErr)
 				}
-				if rmErr := unix.Rmdir(mountpoint); rmErr != nil && !os.IsNotExist(rmErr) {
+				if rmErr := unix.Rmdir(mountpoint); rmErr != nil && !errors.Is(rmErr, os.ErrNotExist) {
 					logrus.WithField("storage-driver", "zfs").Debugf("Failed to remove %s: %v", id, rmErr)
 				}
 
@@ -486,7 +487,7 @@ func (d *Driver) Put(id string) error {
 	if err := detachUnmount(mountpoint); err != nil {
 		logger.Warnf("Failed to unmount %s mount %s: %v", id, mountpoint, err)
 	}
-	if err := unix.Rmdir(mountpoint); err != nil && !os.IsNotExist(err) {
+	if err := unix.Rmdir(mountpoint); err != nil && !errors.Is(err, os.ErrNotExist) {
 		logger.Debugf("Failed to remove %s mount point %s: %v", id, mountpoint, err)
 	}
 

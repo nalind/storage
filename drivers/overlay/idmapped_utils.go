@@ -4,6 +4,7 @@
 package overlay
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -115,7 +116,7 @@ func createIDMappedMount(source, target string, pid int) error {
 		&attr, uint(unsafe.Sizeof(attr))); err != nil {
 		return err
 	}
-	if err := os.Mkdir(target, 0700); err != nil && !os.IsExist(err) {
+	if err := os.Mkdir(target, 0700); err != nil && !errors.Is(err, os.ErrExist) {
 		return err
 	}
 	return moveMount(targetDirFd, target)

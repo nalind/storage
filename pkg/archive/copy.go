@@ -210,7 +210,7 @@ func CopyInfoDestinationPath(path string) (info CopyInfo, err error) {
 	if err != nil {
 		// It's okay if the destination path doesn't exist. We can still
 		// continue the copy operation if the parent directory exists.
-		if !os.IsNotExist(err) {
+		if !errors.Is(err, os.ErrNotExist) {
 			return CopyInfo{}, err
 		}
 

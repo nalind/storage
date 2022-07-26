@@ -85,7 +85,7 @@ func getRootlessRuntimeDirIsolated(env rootlessRuntimeDirEnvironment) (string, e
 
 	tmpPerUserDir := env.getTmpPerUserDir()
 	if tmpPerUserDir != "" {
-		if _, err := env.systemLstat(tmpPerUserDir); os.IsNotExist(err) {
+		if _, err := env.systemLstat(tmpPerUserDir); errors.Is(err, os.ErrNotExist) {
 			if err := os.Mkdir(tmpPerUserDir, 0700); err != nil {
 				logrus.Errorf("Failed to create temp directory for user: %v", err)
 			} else {
@@ -193,7 +193,7 @@ func reloadConfigurationFileIfNeeded(configFile string, storeOptions *StoreOptio
 
 	fi, err := os.Stat(configFile)
 	if err != nil {
-		if !os.IsNotExist(err) {
+		if !errors.Is(err, os.ErrNotExist) {
 			fmt.Printf("Failed to read %s %v\n", configFile, err.Error())
 		}
 		return

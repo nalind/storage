@@ -1,6 +1,7 @@
 package system
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"syscall"
@@ -45,7 +46,7 @@ func EnsureRemoveAll(dir string) error {
 			return err
 		}
 
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			if notExistErr[pe.Path] {
 				return err
 			}

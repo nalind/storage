@@ -1,8 +1,10 @@
+//go:build linux && cgo
 // +build linux,cgo
 
 package btrfs
 
 import (
+	"errors"
 	"os"
 	"path"
 	"testing"
@@ -58,7 +60,7 @@ func TestBtrfsSubvolDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := os.Stat(path.Join(dir, "subvoltest")); !os.IsNotExist(err) {
+	if _, err := os.Stat(path.Join(dir, "subvoltest")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("expected not exist error on nested subvol, got: %v", err)
 	}
 }

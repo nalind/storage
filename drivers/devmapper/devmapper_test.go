@@ -1,8 +1,10 @@
+//go:build linux && cgo
 // +build linux,cgo
 
 package devmapper
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -56,7 +58,7 @@ func initLoopbacks() error {
 func getBaseLoopStats() (*syscall.Stat_t, error) {
 	loop0, err := os.Stat("/dev/loop0")
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrNotExist) {
 			return &syscall.Stat_t{
 				Uid:  0,
 				Gid:  0,

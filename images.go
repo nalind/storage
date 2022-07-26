@@ -262,7 +262,7 @@ func (r *imageStore) Load() error {
 	shouldSave := false
 	rpath := r.imagespath()
 	data, err := ioutil.ReadFile(rpath)
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	images := []*Image{}

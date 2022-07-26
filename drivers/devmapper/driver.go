@@ -1,8 +1,10 @@
+//go:build linux && cgo
 // +build linux,cgo
 
 package devmapper
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -178,7 +180,7 @@ func (d *Driver) Remove(id string) error {
 	// as a failure to remove the container.
 	mp := path.Join(d.home, "mnt", id)
 	err := unix.Rmdir(mp)
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		logrus.WithField("storage-driver", "devicemapper").Warnf("unable to remove mount point %q: %s", mp, err)
 	}
 
@@ -206,7 +208,7 @@ func (d *Driver) Get(id string, options graphdriver.MountOpts) (string, error) {
 		d.ctr.Decrement(mp)
 		return "", err
 	}
-	if err := idtools.MkdirAs(mp, 0755, uid, gid); err != nil && !os.IsExist(err) {
+	if err := idtools.MkdirAs(mp, 0755, uid, gid); err != nil && !errors.Is(err, os.ErrExist) {
 		d.ctr.Decrement(mp)
 		return "", err
 	}
@@ -224,7 +226,7 @@ func (d *Driver) Get(id string, options graphdriver.MountOpts) (string, error) {
 	}
 
 	idFile := path.Join(mp, "id")
-	if _, err := os.Stat(idFile); err != nil && os.IsNotExist(err) {
+	if _, err := os.Stat(idFile); err != nil && errors.Is(err, os.ErrNotExist) {
 		// Create an "id" file with the container/image id in it to help reconstruct this in case
 		// of later problems
 		if err := ioutil.WriteFile(idFile, []byte(id), 0600); err != nil {

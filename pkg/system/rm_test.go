@@ -1,6 +1,7 @@
 package system
 
 import (
+	"errors"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -78,7 +79,7 @@ func TestEnsureRemoveAllWithMount(t *testing.T) {
 		t.Fatal("timeout waiting for EnsureRemoveAll to finish")
 	}
 
-	if _, err := os.Stat(dir1); !os.IsNotExist(err) {
+	if _, err := os.Stat(dir1); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("expected %q to not exist", dir1)
 	}
 }

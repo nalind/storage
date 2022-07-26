@@ -198,7 +198,7 @@ func (r *containerStore) Load() error {
 	needSave := false
 	rpath := r.containerspath()
 	data, err := ioutil.ReadFile(rpath)
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	containers := []*Container{}

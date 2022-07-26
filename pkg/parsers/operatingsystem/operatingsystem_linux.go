@@ -5,6 +5,7 @@ package operatingsystem
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -28,7 +29,7 @@ var (
 func GetOperatingSystem() (string, error) {
 	osReleaseFile, err := os.Open(etcOsRelease)
 	if err != nil {
-		if !os.IsNotExist(err) {
+		if !errors.Is(err, os.ErrNotExist) {
 			return "", err
 		}
 		osReleaseFile, err = os.Open(altOsRelease)
