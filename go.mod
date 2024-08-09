@@ -20,7 +20,7 @@ require (
 	github.com/mattn/go-shellwords v1.0.12
 	github.com/mistifyio/go-zfs/v3 v3.0.1
 	github.com/moby/sys/mountinfo v0.7.2
-	github.com/moby/sys/user v0.2.0
+	github.com/moby/sys/user v0.3.0
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/runtime-spec v1.2.0
 	github.com/opencontainers/selinux v1.11.0
@@ -31,7 +31,7 @@ require (
 	github.com/ulikunitz/xz v0.5.12
 	github.com/vbatts/tar-split v0.11.5
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d
-	golang.org/x/sys v0.23.0
+	golang.org/x/sys v0.24.0
 	gotest.tools v2.2.0+incompatible
 )
 
